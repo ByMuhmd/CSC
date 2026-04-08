@@ -1,0 +1,163 @@
+@import url('https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+    color-scheme: dark;
+}
+
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #000000;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(168, 85, 247, 0.16);
+    border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(168, 85, 247, 0.28);
+}
+
+@layer utilities {
+    .perspective-1000 {
+        perspective: 1000px;
+    }
+
+    .transform-style-3d {
+        transform-style: preserve-3d;
+    }
+
+    .backface-hidden {
+        backface-visibility: hidden;
+    }
+
+    .rotate-y-180 {
+        transform: rotateY(180deg);
+    }
+}
+
+@keyframes snowfall {
+    0% {
+        transform: translateY(-10px) translateX(0);
+        opacity: 0;
+    }
+
+    10% {
+        opacity: 1;
+    }
+
+    100% {
+        transform: translateY(100vh) translateX(20px);
+        opacity: 0.3;
+    }
+}
+
+.animate-snowfall {
+    animation: snowfall 10s linear infinite;
+}
+
+@layer utilities {
+    .chat-bubble-incoming {
+        @apply relative bg-white/[0.08] text-gray-200 border border-white/5;
+        border-bottom-left-radius: 4px;
+    }
+    
+    .chat-bubble-outgoing {
+        @apply relative text-white shadow-lg;
+        background: rgba(168, 85, 247, 0.9);
+        box-shadow: 0 10px 30px rgba(168, 85, 247, 0.2);
+        border-bottom-right-radius: 4px;
+    }
+
+    .chat-tail-in::before {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: -6px;
+        width: 12px;
+        height: 12px;
+        background: rgba(255, 255, 255, 0.08);
+        clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    }
+
+    .chat-tail-out::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        right: -6px;
+        width: 12px;
+        height: 12px;
+        background: rgba(168, 85, 247, 0.9);
+        clip-path: polygon(0 0, 0 100%, 100% 100%);
+    }
+
+    .chat-wallpaper {
+        background-color: #0b0c10;
+        background-image: 
+            radial-gradient(rgba(168, 85, 247, 0.08) 1px, transparent 0);
+        background-size: 24px 24px;
+        background-position: -19px -19px;
+    }
+
+    .glass-card {
+        @apply bg-[#0A0C10]/60 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.8)];
+    }
+
+    .glass-card-hover {
+        @apply hover:bg-[#0A0C10]/80 hover:border-white/20 transition-all duration-500;
+    }
+
+    .auth-input {
+        @apply w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3.5 text-white placeholder:text-gray-600 focus:outline-none focus:border-purple-500/50 focus:ring-4 focus:ring-purple-500/10 transition-all duration-300;
+    }
+}
+
+.auth-input:focus {
+    border-color: rgba(168, 85, 247, 0.45);
+    box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.12);
+}
+
+@keyframes float-blob {
+    0% { transform: translate(0px, 0px) scale(1); }
+    33% { transform: translate(30px, -50px) scale(1.1); }
+    66% { transform: translate(-20px, 20px) scale(0.9); }
+    100% { transform: translate(0px, 0px) scale(1); }
+}
+
+.animate-blob {
+    animation: float-blob 7s infinite alternate;
+}
+
+.animation-delay-2000 {
+    animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+    animation-delay: 4s;
+}

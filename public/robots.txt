@@ -1,0 +1,25 @@
+User-agent: *
+Allow: /
+
+# Block Common MJ/AI Bots (Optional aggressive blocking)
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+# Block SEO Spammers (Example)
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+# Sitemap
+Sitemap: https://cscohort.vercel.app/sitemap.xml

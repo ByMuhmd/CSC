@@ -1,0 +1,56 @@
+{
+  "name": "thecohort",
+  "private": false,
+  "version": "1.0.0",
+  "description": "A secure Arabic-first learning platform for CS students.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ByMuhmd/thecohort.git"
+  },
+  "homepage": "https://github.com/ByMuhmd/thecohort",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "npx --yes -p typescript tsc && npx vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.89.0",
+    "@types/marked": "^5.0.2",
+    "@vercel/analytics": "^2.0.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "dompurify": "^3.3.1",
+    "framer-motion": "^12.23.26",
+    "html2canvas": "^1.4.1",
+    "idb-keyval": "^6.2.2",
+    "jspdf": "^4.0.0",
+    "katex": "^0.16.27",
+    "lucide-react": "^0.263.1",
+    "marked": "^17.0.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-qr-code": "^2.0.18",
+    "react-router-dom": "^7.11.0",
+    "tailwind-merge": "^3.4.0",
+    "zustand": "^5.0.9"
+  },
+  "devDependencies": {
+    "@types/dompurify": "^3.0.5",
+    "@types/katex": "^0.16.7",
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.0.3",
+    "autoprefixer": "^10.4.14",
+    "javascript-obfuscator": "^5.4.1",
+    "postcss": "^8.4.27",
+    "tailwindcss": "^3.3.3",
+    "tailwindcss-animate": "^1.0.7",
+    "terser": "^5.46.1",
+    "typescript": "^5.0.2",
+    "vite": "^4.4.5",
+    "vite-plugin-obfuscator": "^1.0.5",
+    "vite-plugin-pwa": "^1.2.0"
+  }
+}
