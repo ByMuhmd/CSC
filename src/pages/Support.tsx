@@ -75,8 +75,8 @@ export default function Support() {
         try {
             const msg = await supportService.sendMessage(activeTicket.id, content);
             setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg]);
-        } catch (err) {
-            alert('Failed to send message');
+        } catch (err: any) {
+            alert(err?.message || 'Failed to send message');
         } finally {
             setSending(false);
         }
@@ -96,8 +96,8 @@ export default function Support() {
             setShowNewTicketModal(false);
             setNewTicketSubject('');
             setNewTicketMessage('');
-        } catch (err) {
-            alert('Failed to create ticket');
+        } catch (err: any) {
+            alert(err?.message || 'Failed to create ticket');
         } finally {
             setCreatingTicket(false);
         }

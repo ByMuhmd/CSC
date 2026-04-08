@@ -20,6 +20,27 @@ export interface SupportMessage {
     sender?: { full_name: string; avatar_url: string };
 }
 
+type ProfileLite = {
+    id: string;
+    full_name: string;
+    avatar_url: string;
+};
+
+const mapProfilesById = (profiles: ProfileLite[] | null) =>
+    Object.fromEntries((profiles || []).map((p) => [p.id, p]));
+
+const notifyAdminTeam = async (title: string, message: string) => {
+    try {
+        await supabase.from('notifications').insert([
+            { title, message, type: 'info', target_audience: 'super_admin' },
+            { title, message, type: 'info', target_audience: 'admin' },
+            { title, message, type: 'info', target_audience: 'moderator' }
+        ]);
+    } catch (err) {
+        console.error('Failed to notify admin team:', err);
+    }
+};
+
 export const supportService = {
     async createTicket(subject: string, initialContent?: string): Promise<SupportTicket> {
         const { data: { user } } = await supabase.auth.getUser();
@@ -53,6 +74,14 @@ export const supportService = {
             }
         }
 
+        // Notify admins and moderators
+        const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
+        const senderName = profile?.full_name || 'A student';
+        notifyAdminTeam(
+            'New Support Inquiry',
+            `${senderName} started a new ticket: "${subject}"`
+        );
+
         return ticket as SupportTicket;
     },
 
@@ -73,25 +102,60 @@ export const supportService = {
     async getAllTickets(): Promise<SupportTicket[]> {
         const { data, error } = await supabase
             .from('support_tickets')
-            .select('*, user:profiles(full_name, avatar_url)')
+            .select('*')
             .order('created_at', { ascending: false });
 
         if (error) throw error;
-        return data as SupportTicket[];
+
+        const tickets = (data || []) as SupportTicket[];
+        const userIds = [...new Set(tickets.map((t) => t.user_id).filter(Boolean))];
+        if (userIds.length === 0) return tickets;
+
+        const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url')
+            .in('id', userIds);
+
+        const profileMap = mapProfilesById((profiles || []) as ProfileLite[]);
+        return tickets.map((ticket) => ({
+            ...ticket,
+            user: profileMap[ticket.user_id]
+                ? {
+                    full_name: profileMap[ticket.user_id].full_name,
+                    avatar_url: profileMap[ticket.user_id].avatar_url
+                }
+                : undefined
+        }));
     },
 
     async getMessages(ticketId: string): Promise<SupportMessage[]> {
         const { data, error } = await supabase
             .from('support_messages')
-            .select(`
-                *,
-                sender:profiles(full_name, avatar_url)
-            `)
+            .select('*')
             .eq('ticket_id', ticketId)
             .order('created_at', { ascending: true });
 
         if (error) throw error;
-        return data as SupportMessage[];
+
+        const messages = (data || []) as SupportMessage[];
+        const senderIds = [...new Set(messages.map((m) => m.sender_id).filter(Boolean))];
+        if (senderIds.length === 0) return messages;
+
+        const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url')
+            .in('id', senderIds);
+
+        const profileMap = mapProfilesById((profiles || []) as ProfileLite[]);
+        return messages.map((message) => ({
+            ...message,
+            sender: profileMap[message.sender_id]
+                ? {
+                    full_name: profileMap[message.sender_id].full_name,
+                    avatar_url: profileMap[message.sender_id].avatar_url
+                }
+                : undefined
+        }));
     },
 
     async sendMessage(ticketId: string, content: string, isAdmin: boolean = false): Promise<SupportMessage> {
@@ -127,6 +191,15 @@ export const supportService = {
         if (error) throw error;
 
         await supabase.from('support_tickets').update({ status: 'open' }).eq('id', ticketId);
+
+        // Notify admins and moderators if it's a student message
+        if (!isAdminReply) {
+            const senderName = profile?.full_name || 'A student';
+            notifyAdminTeam(
+                'New Support Message',
+                `${senderName}: "${content.length > 50 ? content.substring(0, 47) + '...' : content}"`
+            );
+        }
 
         return { ...data, sender: profile || undefined } as SupportMessage;
     },

@@ -4,6 +4,8 @@ import { Trash2, Plus, FileText, Clock, FolderOpen, ArrowRight, Loader2, BookOpe
 import { useToast } from '../../context/ToastContext';
 import AdminQuizImportModal from './AdminQuizImportModal';
 import * as LucideIcons from 'lucide-react';
+import { normalizeQuizAccessCode } from '../../utils/quizAccess';
+
 import QRCode from 'react-qr-code';
 import html2canvas from 'html2canvas';
 
@@ -46,8 +48,10 @@ export default function AdminQuizzes() {
                         id,
                         title,
                         subject_id,
-                        subjects (name)
+                        subjects (name),
+                        profiles:submitted_by(full_name)
                     )
+
                 `)
                 .ilike('question', `%${searchQuery}%`)
                 .limit(20);
@@ -109,9 +113,10 @@ export default function AdminQuizzes() {
 
         const { data, error } = await supabase
             .from('quizzes')
-            .select('*, questions(count)')
+            .select('*, questions(count), profiles:submitted_by(full_name)')
             .eq('subject_id', selectedSubject.id)
             .order('created_at', { ascending: false });
+
 
         if (!error && data) {
             const transformed = data.map(q => ({
@@ -454,7 +459,15 @@ export default function AdminQuizzes() {
                                                 <div className="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">
                                                     <span className="text-purple-400">{result.quizzes?.subjects?.name || 'Unknown Subject'}</span>
                                                     <ChevronRight size={12} />
-                                                    <span>{result.quizzes?.title || 'Unknown Quiz'}</span>
+                                                    <span>
+                                                        {result.quizzes?.title || 'Unknown Quiz'}
+                                                        {result.quizzes?.profiles?.full_name && (
+                                                            <span className="ml-1 text-[9px] text-purple-400 opacity-80">
+                                                                (By: {result.quizzes.profiles.full_name})
+                                                            </span>
+                                                        )}
+                                                    </span>
+
                                                 </div>
                                                 <h3 className="text-lg font-bold text-gray-200 group-hover:text-white line-clamp-2">{result.question}</h3>
                                             </div>
@@ -521,6 +534,12 @@ export default function AdminQuizzes() {
                                         </div>
 
                                         <h3 className="text-xl font-bold text-white mb-2 group-hover:text-purple-300 transition-colors line-clamp-1">{quiz.title}</h3>
+                                        {quiz.profiles?.full_name && (
+                                            <p className="text-[10px] text-purple-400 font-bold uppercase tracking-wider mb-2">
+                                                By: {quiz.profiles.full_name}
+                                            </p>
+                                        )}
+
                                         {quiz.is_private && (
                                             <div className="mb-2">
                                                 <span className="bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-1 w-max">
@@ -872,8 +891,9 @@ function InlineAdminQuizDetail({ quizId, onBack, initialQuestionId }: InlineDeta
             is_private: isPrivate,
             shuffle_questions: shuffleQuestions,
             shuffle_options: shuffleOptions,
-            access_code: accessCode || null,
+            access_code: normalizeQuizAccessCode(accessCode) || null,
         };
+
 
         const { error } = await supabase
             .from('quizzes')

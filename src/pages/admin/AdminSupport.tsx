@@ -24,12 +24,48 @@ export default function AdminSupport() {
     }, []);
 
     useEffect(() => {
+        const ch = supabase
+            .channel('admin_support_tickets')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_tickets' }, () => {
+                fetchTickets();
+            })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'support_tickets' }, () => {
+                fetchTickets();
+            })
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'support_messages' }, () => {
+                fetchTickets();
+            })
+            .subscribe();
+
+        return () => {
+            ch.unsubscribe();
+        };
+    }, []);
+
+    useEffect(() => {
+        const timer = window.setInterval(() => {
+            fetchTickets();
+        }, 10000);
+
+        return () => {
+            window.clearInterval(timer);
+        };
+    }, []);
+
+    useEffect(() => {
         if (!selectedTicket) return;
         loadMessages(selectedTicket.id);
         const ch = supportService.subscribeToMessages(selectedTicket.id, (msg) => {
             setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg]);
         });
-        return () => { ch.unsubscribe(); };
+        const timer = window.setInterval(() => {
+            loadMessages(selectedTicket.id);
+        }, 5000);
+
+        return () => {
+            ch.unsubscribe();
+            window.clearInterval(timer);
+        };
     }, [selectedTicket?.id]);
 
     useEffect(() => {
@@ -40,8 +76,6 @@ export default function AdminSupport() {
         setLoading(true);
         try {
             const data = await supportService.getAllTickets();
-            console.log("DEBUG: Raw tickets from DB:", data); 
-            console.log("DEBUG: Current tickets count:", data?.length);
             setTickets(data || []);
         } catch (err) {
             console.error("Error fetching tickets:", err);
@@ -53,7 +87,6 @@ export default function AdminSupport() {
     const loadMessages = async (id: string) => {
         try {
             const data = await supportService.getMessages(id);
-            console.log("Fetched messages for ticket:", id, data);
             setMessages(data);
         } catch (err) {
             console.error('Failed to load messages', err);
@@ -68,8 +101,8 @@ export default function AdminSupport() {
         try {
             await supportService.sendMessage(selectedTicket.id, content, true);
             loadMessages(selectedTicket.id);
-        } catch (err) {
-            alert("Failed to send reply.");
+        } catch (err: any) {
+            alert(err?.message || "Failed to send reply.");
         } finally {
             setSending(false);
         }
@@ -81,8 +114,8 @@ export default function AdminSupport() {
             await supportService.updateTicketStatus(selectedTicket.id, status);
             setTickets(prev => prev.map(t => t.id === selectedTicket.id ? { ...t, status } : t));
             setSelectedTicket(prev => prev ? { ...prev, status } : null);
-        } catch (err) {
-            alert("Failed to update status.");
+        } catch (err: any) {
+            alert(err?.message || "Failed to update status.");
         }
     };
 

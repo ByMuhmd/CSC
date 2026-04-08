@@ -95,6 +95,7 @@ export default function AdminLayout() {
         { path: '/admin/users', icon: Users, label: 'Users' },
         { path: '/admin/materials', icon: BookOpen, label: 'Materials' },
         { path: '/admin/support', icon: MessageSquare, label: 'Support Chat' },
+        { path: '/admin/feedback', icon: ClipboardList, label: 'Feedback' },
         { path: '/admin/broadcast', icon: Zap, label: 'Broadcasts' },
 
         { path: '/admin/events', icon: Calendar, label: 'Events' },

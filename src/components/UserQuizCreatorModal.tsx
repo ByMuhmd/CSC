@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { Plus, Trash2, X, Save, Loader2, Lock, Sparkles, CheckCircle2 } from 'lucide-react';
+import { normalizeQuizAccessCode } from '../utils/quizAccess';
+
 
 type QuestionType = 'mcq' | 'true_false' | 'essay';
 
@@ -150,8 +152,9 @@ export default function UserQuizCreatorModal({ onClose, onSuccess, mode = 'modal
                     is_private: true,
                     shuffle_questions: true,
                     shuffle_options: true,
-                    access_code: accessCode.trim().toUpperCase() || null,
+                    access_code: normalizeQuizAccessCode(accessCode) || null,
                 })
+
                 .select()
                 .single();
 
