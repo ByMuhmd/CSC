@@ -4,9 +4,11 @@ import { supabase } from '../lib/supabase';
 import { useNavigate, Link } from 'react-router-dom';
 import { UserPlus, Loader2, AlertCircle, ArrowRight, ArrowLeft, Camera, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
 import logo from '../assets/logo3.png';
 import { isAllowedEmailDomain, EMAIL_DOMAIN_POLICY_MESSAGE } from '../utils/emailPolicy';
 import { isDisposableEmail, checkRateLimit, getPasswordPolicyIssues } from '../utils/security';
+import { handleSecureError } from '../utils/errorHandling';
 
 const AVATAR_OPTIONS = [
     '/avatars/1.svg',
@@ -29,6 +31,7 @@ export default function SignUp() {
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [captchaToken, setCaptchaToken] = useState<string | null>(null);
     const navigate = useNavigate();
 
     const handleGoogleSignUp = async () => {
@@ -36,7 +39,7 @@ export default function SignUp() {
             provider: 'google',
             options: { redirectTo: window.location.origin + '/profile' }
         });
-        if (error) setError(error.message);
+        if (error) setError(handleSecureError(error, "فشل تسجيل الاشتراك عبر Google"));
     };
 
     const handleFinalSignUp = async () => {
@@ -80,6 +83,7 @@ export default function SignUp() {
                         full_name: sanitizedFullName,
                         avatar_url: avatarUrl,
                         academic_level: academicLevel,
+                        captchaToken: captchaToken || undefined
                     }
                 }
             });
@@ -87,7 +91,7 @@ export default function SignUp() {
             if (signUpError) throw signUpError;
             navigate('/profile');
         } catch (err: any) {
-            setError(err.message);
+            setError(handleSecureError(err, "فشل إنشاء الحساب. يرجى المحاولة مرة أخرى."));
             setLoading(false);
         }
     };
@@ -344,6 +348,17 @@ export default function SignUp() {
                                                     ))}
                                                 </div>
                                             </div>
+
+                                            {import.meta.env.VITE_HCAPTCHA_SITE_KEY && (
+                                                <div className="flex justify-center py-2">
+                                                    <HCaptcha
+                                                        sitekey={import.meta.env.VITE_HCAPTCHA_SITE_KEY}
+                                                        onVerify={(token) => setCaptchaToken(token)}
+                                                        onExpire={() => setCaptchaToken(null)}
+                                                        theme="dark"
+                                                    />
+                                                </div>
+                                            )}
 
                                             <div className="flex gap-4 mt-6">
                                                 <button onClick={() => paginate(4)} disabled={loading} className="px-6 py-4 rounded-2xl bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-all"><ArrowLeft className="w-5 h-5" /></button>

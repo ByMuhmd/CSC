@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { Upload, X, FileText, CheckCircle, AlertTriangle, Download, Loader2, Save, Sparkles, Clipboard } from 'lucide-react';
 import { generateQuizFromTopic, parseQuizFromText, GeneratedQuestion } from '../../services/gemini';
 import { MathRenderer as FormattedText } from '../../components/MathRenderer';
+import { useAuth } from '../../context/AuthContext';
 
 interface Props {
     onClose: () => void;
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export default function AdminQuizImportModal({ onClose, onSuccess, subjectId, semesterId, targetQuizId, initialMode = 'ai' }: Props) {
+    const { profile } = useAuth();
     const [mode, setMode] = useState<'csv' | 'ai'>(initialMode);
     const [loading, setLoading] = useState(false);
 
@@ -107,7 +109,8 @@ export default function AdminQuizImportModal({ onClose, onSuccess, subjectId, se
                     subject_id: subjectId,
                     semester_id: semesterId,
                     is_published: false,
-                    time_limit: 0
+                    time_limit: 0,
+                    submitted_by: profile?.id || null
                 })
                 .select()
                 .single();

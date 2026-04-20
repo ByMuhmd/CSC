@@ -73,7 +73,7 @@ const translations = {
         ctaTitle: "كُن جزءاً من الأثر",
         ctaText: "سواء كنت ترغب في المساهمة بمواد دراسية، اقتراح ميزة، أو التعلم معنا، هناك مكان لك هنا.",
         btnTeam: "بوت تيليجرام الخاص بنا",
-        closing: "BEST REGARDS,", // Using english sign-off as requested
+        closing: "BEST REGARDS,",
         team: "CSC TEAM",
         footerText: "دفعة علوم الحاسب '23 © جميع الحقوق محفوظة",
         back: "عودة",

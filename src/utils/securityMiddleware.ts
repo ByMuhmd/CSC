@@ -38,6 +38,28 @@ export function initSecurityMiddleware() {
     startSessionTimeoutMonitor();
 
     enforceSecureCookies();
+    protectGlobalState();
+}
+
+function protectGlobalState() {
+    const forbiddenKeys = ['__ZUSTAND_STORE__', 'store', 'state', 'auth_token', 'session'];
+    
+    if (import.meta.env.PROD) {
+        forbiddenKeys.forEach(key => {
+            if ((window as any)[key]) {
+                console.warn(`Security Warning: Potential sensitive global key "${key}" detected. Clearing it.`);
+                delete (window as any)[key];
+            }
+            
+            Object.defineProperty(window, key, {
+                set: () => {
+                    console.error(`Security Error: Assignment to global "${key}" is blocked in production.`);
+                },
+                get: () => undefined,
+                configurable: true
+            });
+        });
+    }
 }
 
 function startSessionTimeoutMonitor() {

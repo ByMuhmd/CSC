@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Users, Database, Activity, TrendingUp, Clock, AlertCircle, RefreshCw } from 'lucide-react';
+import { Users, Database, Activity, TrendingUp, Clock, AlertCircle, RefreshCw, BookOpen, FileText, FolderOpen, Calendar } from 'lucide-react';
 
 export default function AdminDashboard() {
     const [stats, setStats] = useState({
@@ -9,6 +9,10 @@ export default function AdminDashboard() {
         totalAttempts: 0,
         avgScore: 0,
         activeNow: 0,
+        totalSubjects: 0,
+        totalQuizzes: 0,
+        totalMaterials: 0,
+        totalEvents: 0,
         dbStatus: 'checking',
         lastSync: new Date().toISOString()
     });
@@ -31,13 +35,21 @@ export default function AdminDashboard() {
                     { count: profileCount },
                     { count: questionCount },
                     { data: attempts },
-                    { data: scoreData }
+                    { data: scoreData },
+                    { count: subjectCount },
+                    { count: quizCount },
+                    { count: materialCount },
+                    { count: eventCount }
                 ] = await Promise.all([
                     supabase.from('guest_scores').select('*', { count: 'exact', head: true }),
                     supabase.from('profiles').select('*', { count: 'exact', head: true }),
                     supabase.from('questions').select('*', { count: 'exact', head: true }),
-                    supabase.from('quiz_results').select('*').order('created_at', { ascending: false }).limit(10),
-                    supabase.from('quiz_results').select('percentage')
+                    supabase.from('quiz_results').select('*').order('created_at', { ascending: false }).limit(20),
+                    supabase.from('quiz_results').select('percentage'),
+                    supabase.from('subjects').select('*', { count: 'exact', head: true }),
+                    supabase.from('quizzes').select('*', { count: 'exact', head: true }),
+                    supabase.from('materials').select('*', { count: 'exact', head: true }),
+                    supabase.from('events').select('*', { count: 'exact', head: true })
                 ]);
 
                 let avg = 0;
@@ -67,6 +79,10 @@ export default function AdminDashboard() {
                     totalAttempts: realAttemptCount || 0,
                     avgScore: avg,
                     activeNow: (activeProfiles || 0) + (activeGuests || 0),
+                    totalSubjects: subjectCount || 0,
+                    totalQuizzes: quizCount || 0,
+                    totalMaterials: materialCount || 0,
+                    totalEvents: eventCount || 0,
                     dbStatus: 'connected'
                 }));
 
@@ -130,11 +146,11 @@ export default function AdminDashboard() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard
-                    title="Total Knowledge Base"
+                    title="Knowledge Base"
                     value={stats.totalQuestions}
                     icon={Database}
                     color="from-purple-600/20 to-indigo-600/10 border-purple-500/20"
-                    subtitle="Questions in DB"
+                    subtitle="Total Questions"
                 />
                 <StatCard
                     title="Active Learners"
@@ -151,58 +167,74 @@ export default function AdminDashboard() {
                     subtitle="Quizzes Completed"
                 />
                 <StatCard
-                    title="Global Performance"
+                    title="Global Score"
                     value={`${stats.avgScore}%`}
                     icon={TrendingUp}
                     color="from-orange-600/20 to-amber-600/10 border-orange-500/20"
-                    subtitle="Average Score"
-                />
-                <StatCard 
-                    title="Live Traffic"
-                    value={stats.activeNow}
-                    icon={Activity}
-                    color="from-rose-500/20 to-pink-500/10 border-rose-500/20"
-                    subtitle="Users active now"
+                    subtitle="Average Performance"
                 />
                 <StatCard
-                    title="Live Sync"
-                    value={refreshing ? 'SYNCING' : 'READY'}
-                    icon={RefreshCw}
-                    color="from-cyan-600/20 to-sky-600/10 border-cyan-500/20"
-                    subtitle={lastUpdated ? `Updated ${new Date(lastUpdated).toLocaleTimeString()}` : 'Awaiting first refresh'}
+                    title="Course Library"
+                    value={stats.totalSubjects}
+                    icon={BookOpen}
+                    color="from-indigo-600/20 to-blue-600/10 border-indigo-500/20"
+                    subtitle="Academic Subjects"
+                />
+                <StatCard
+                    title="Quiz Bank"
+                    value={stats.totalQuizzes}
+                    icon={FileText}
+                    color="from-rose-600/20 to-red-600/10 border-rose-500/20"
+                    subtitle="Published Quizzes"
+                />
+                <StatCard
+                    title="Study Materials"
+                    value={stats.totalMaterials}
+                    icon={FolderOpen}
+                    color="from-amber-600/20 to-yellow-600/10 border-amber-500/20"
+                    subtitle="Resources & PDFs"
+                />
+                <StatCard
+                    title="Platform Events"
+                    value={stats.totalEvents}
+                    icon={Calendar}
+                    color="from-emerald-600/20 to-green-600/10 border-emerald-500/20"
+                    subtitle="Scheduled Events"
                 />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-                <div className="lg:col-span-2 bg-[#0A0C10]/80 backdrop-blur-xl border border-white/5 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+            <div className="grid grid-cols-1 gap-8">
+                <div className="bg-[#0A0C10]/80 backdrop-blur-xl border border-white/5 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
                     <div className="p-8 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
                         <h3 className="font-bold text-xl flex items-center gap-3 text-white">
                             <Clock size={20} className="text-purple-400" />
                             Recent Activity
                         </h3>
+                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Showing latest 20 attempts</span>
                     </div>
 
                     <div className="flex-1 overflow-x-auto">
                         <table className="w-full text-left">
-                            <thead className="bg-white/5 text-xs uppercase text-gray-400 font-bold tracking-wider">
+                            <thead className="bg-white/5 text-[10px] uppercase text-gray-400 font-bold tracking-widest">
                                 <tr>
-                                    <th className="px-6 py-4">User</th>
-                                    <th className="px-6 py-4">Quiz</th>
-                                    <th className="px-6 py-4">Score</th>
-                                    <th className="px-6 py-4 text-right">Time</th>
+                                    <th className="px-6 py-5">User</th>
+                                    <th className="px-6 py-5">Subject / Quiz</th>
+                                    <th className="px-6 py-5">Questions</th>
+                                    <th className="px-6 py-5">Score</th>
+                                    <th className="px-6 py-5">Status</th>
+                                    <th className="px-6 py-5 text-right">Time</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
                                 {loading ? (
-                                    [1, 2, 3].map(i => (
+                                    [1, 2, 3, 4, 5].map(i => (
                                         <tr key={i} className="animate-pulse">
-                                            <td colSpan={4} className="px-6 py-8 bg-white/5"></td>
+                                            <td colSpan={6} className="px-6 py-8 bg-white/5"></td>
                                         </tr>
                                     ))
                                 ) : recentActivity.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
+                                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                                             <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
                                             No recent activity found.
                                         </td>
@@ -211,19 +243,32 @@ export default function AdminDashboard() {
                                     recentActivity.map((attempt) => (
                                         <tr key={attempt.id} className="hover:bg-white/5 transition-colors group">
                                             <td className="px-6 py-4 font-medium text-white flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-500 to-blue-500 flex items-center justify-center text-xs font-black text-white shadow-lg shrink-0">
+                                                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-500 to-blue-500 flex items-center justify-center text-sm font-black text-white shadow-lg shrink-0 group-hover:scale-110 transition-transform">
                                                     {attempt.user_name?.[0]?.toUpperCase() || 'U'}
                                                 </div>
-                                                <span className="truncate max-w-[120px] font-bold group-hover:text-purple-300 transition-colors" title={attempt.user_name}>{attempt.user_name || 'Anonymous'}</span>
+                                                <div className="flex flex-col">
+                                                    <span className="truncate max-w-[150px] font-bold group-hover:text-purple-300 transition-colors" title={attempt.user_name}>{attempt.user_name || 'Anonymous'}</span>
+                                                    <span className="text-[10px] text-gray-500 font-medium">Verified User</span>
+                                                </div>
                                             </td>
-                                            <td className="px-6 py-4 text-gray-300">
-                                                <span className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-xs font-mono text-gray-300 group-hover:border-purple-500/30 transition-colors">
-                                                    {attempt.quiz_category}
-                                                </span>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col gap-1">
+                                                    <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 text-[10px] font-bold w-fit border border-purple-500/20">
+                                                        {attempt.quiz_category}
+                                                    </span>
+                                                    <span className="text-xs text-gray-400 font-medium truncate max-w-[200px]">Quiz Attempt</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2 text-sm text-gray-300 font-bold">
+                                                    <span className="text-white">{attempt.score || 0}</span>
+                                                    <span className="text-gray-600">/</span>
+                                                    <span>{attempt.total_questions || '-'}</span>
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-20 h-2 bg-gray-800 rounded-full overflow-hidden">
+                                                    <div className="w-24 h-2 bg-gray-800 rounded-full overflow-hidden">
                                                         <div
                                                             className={`h-full rounded-full shadow-lg ${attempt.percentage >= 70 ? 'bg-emerald-500 shadow-emerald-500/50' : attempt.percentage >= 40 ? 'bg-amber-500 shadow-amber-500/50' : 'bg-rose-500 shadow-rose-500/50'}`}
                                                             style={{ width: `${attempt.percentage}%` }}
@@ -234,48 +279,24 @@ export default function AdminDashboard() {
                                                     </span>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 text-right text-xs text-gray-500 font-mono">
-                                                {new Date(attempt.created_at).toLocaleTimeString()}
+                                            <td className="px-6 py-4">
+                                                {attempt.percentage >= 50 ? (
+                                                    <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-black uppercase border border-emerald-500/20">Passed</span>
+                                                ) : (
+                                                    <span className="px-3 py-1 rounded-full bg-rose-500/10 text-rose-400 text-[10px] font-black uppercase border border-rose-500/20">Failed</span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 text-right text-xs text-gray-400 font-mono">
+                                                <div className="flex flex-col items-end">
+                                                    <span className="font-bold">{new Date(attempt.created_at).toLocaleTimeString()}</span>
+                                                    <span className="text-[10px] text-gray-600">{new Date(attempt.created_at).toLocaleDateString()}</span>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))
                                 )}
                             </tbody>
                         </table>
-                    </div>
-                </div>
-
-                <div className="space-y-6">
-                    <div className="bg-[#0A0C10]/80 backdrop-blur-xl border border-white/5 rounded-3xl p-8 shadow-xl">
-                        <h3 className="font-bold text-xl mb-6 text-white flex items-center gap-2">
-                            <Activity size={20} className="text-blue-400" /> System Health
-                        </h3>
-                        <div className="space-y-5">
-                            <div className="flex justify-between items-center group">
-                                <span className="text-sm font-medium text-gray-400 group-hover:text-gray-300">Database Connection</span>
-                                <span className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded bg-white/5 ${stats.dbStatus === 'connected' ? 'text-emerald-400 border border-emerald-500/20' : 'text-rose-400 border border-rose-500/20'}`}>
-                                    <div className={`w-1.5 h-1.5 rounded-full ${stats.dbStatus === 'connected' ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`} />
-                                    {stats.dbStatus === 'connected' ? 'Operational' : 'Error'}
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center group">
-                                <span className="text-sm font-medium text-gray-400 group-hover:text-gray-300">API Latency</span>
-                                <span className="text-xs font-mono text-blue-400 bg-white/5 px-2 py-1 rounded border border-white/5">~24ms</span>
-                            </div>
-                            <div className="w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent my-2" />
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-gray-400">Last Sync</span>
-                                <span className="text-xs text-gray-500 bg-white/5 px-2 py-1 rounded">{lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'Waiting for sync'}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 border border-purple-500/20 rounded-3xl p-8 backdrop-blur-sm relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none group-hover:bg-purple-500/20 transition-colors" />
-                        <h3 className="font-bold text-xl text-white mb-2 relative z-10">Admin Tips</h3>
-                        <p className="text-sm text-purple-200/70 mb-4 relative z-10 leading-relaxed">
-                            You can centrally manage all quizzes from the new <span className="text-white font-bold">Quiz Manager</span> tab. Data migration is available in Settings.
-                        </p>
                     </div>
                 </div>
             </div>

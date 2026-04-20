@@ -134,32 +134,48 @@ export default function AdminUsers() {
         if (!selectedUser) return;
 
         async function loadUserDetails() {
-
-            if ((selectedUser as any).detailsLoaded || (selectedUser as any).quiz_results) {
-                processUserHistory(selectedUser);
-                return;
-            }
-
             setHistoryLoading(true);
             try {
                 const table = selectedUser?.type === 'user' ? 'profiles' : 'guest_scores';
-
-                const { data, error } = await supabase
+                
+                const { data: userData, error: userError } = await supabase
                     .from(table)
                     .select('quiz_results, study_sessions, materials_completed, badges')
                     .eq('id', selectedUser?.id)
                     .single();
 
-                if (error) throw error;
+                const { data: realResults, error: historyError } = await supabase
+                    .from('quiz_results')
+                    .select('*')
+                    .eq('user_id', selectedUser?.id)
+                    .order('created_at', { ascending: false });
 
-                const updatedUser = { ...selectedUser, ...data, detailsLoaded: true };
+                if (userError) throw userError;
+
+                const tableResults = (realResults || []).map(r => ({
+                    ...r,
+                    type: 'quiz',
+                    sortTime: r.created_at
+                }));
+
+                const sessions = (userData?.study_sessions || []).map((s: any) => ({
+                    ...s,
+                    type: 'session',
+                    sortTime: s.date
+                }));
+
+                const merged = [...tableResults, ...sessions];
+                merged.sort((a, b) => new Date(b.sortTime || 0).getTime() - new Date(a.sortTime || 0).getTime());
+
+                setUserHistory(merged);
+                
+                const updatedUser = { ...selectedUser, ...userData, detailsLoaded: true };
                 setSelectedUser(updatedUser as ExtendedUser);
+                setUsers(prev => prev.map(u => u.id === updatedUser.id ? { ...u, ...userData, detailsLoaded: true } : u));
 
-                setUsers(prev => prev.map(u => u.id === updatedUser.id ? { ...u, ...data, detailsLoaded: true } : u));
-
-                processUserHistory(updatedUser);
             } catch (err) {
                 console.error("Error fetching user details:", err);
+            } finally {
                 setHistoryLoading(false);
             }
         }

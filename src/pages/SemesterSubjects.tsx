@@ -20,7 +20,6 @@ export default function SemesterSubjects({ mode }: SemesterSubjectsProps) {
             const { data, error } = await supabase
                 .from('semesters')
                 .select(`
-                    *,
                     subjects (
                         id,
                         name,

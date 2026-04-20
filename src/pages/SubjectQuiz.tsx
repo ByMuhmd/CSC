@@ -15,8 +15,11 @@ export default function SubjectQuiz() {
     const [searchParams] = useSearchParams();
     const quizId = searchParams.get('quizId');
     const challengeId = searchParams.get('challengeId');
+    const generatedQuestionLimit = Number(searchParams.get('limit') || searchParams.get('questions') || 0) || undefined;
+    const generatedTimeLimit = Number(searchParams.get('time') || searchParams.get('minutes') || 0) || undefined;
+    const isGeneratedQuiz = quizId === 'general';
     const [challengeChallengerId, setChallengeChallengerId] = useState(searchParams.get('challengerId'));
-    const { questions, categories, loading: quizLoading, error, fetchQuestionsForQuiz, loadingQuestions } = useQuizBank(subjectId, semesterId);
+    const { questions, categories, loading: quizLoading, error, fetchQuestionsForQuiz, loadingQuestions, isOffline } = useQuizBank(subjectId, semesterId);
     
     const [subject, setSubject] = useState<any>(null);
     const [semester, setSemester] = useState<any>(null);
@@ -193,7 +196,7 @@ export default function SubjectQuiz() {
                     setChallengeQuestions([]);
                 }
 
-                if (quizId) {
+                if (quizId && !isGeneratedQuiz) {
                     const { data: quizData } = await supabase
                         .from('quizzes')
                         .select('id, title, description, time_limit, shuffle_questions, shuffle_options')
@@ -250,9 +253,11 @@ export default function SubjectQuiz() {
         return (
             <div className="min-h-screen bg-black text-white flex items-center justify-center">
                 <div className="text-center text-red-500">
-                    <h1 className="text-2xl font-bold mb-4">Error Loading Quiz</h1>
-                    <p>{(error as any).message || "Failed to load"}</p>
-                    <button onClick={() => window.location.reload()} className="mt-4 text-white underline">Retry</button>
+                    <h1 className="text-2xl font-bold mb-4">
+                        {isOffline ? 'No Connection' : 'Error Loading Quiz'}
+                    </h1>
+                    <p>{isOffline ? 'You are offline. Cached content will be used if available.' : (error as any).message || "Failed to load"}</p>
+                    {!isOffline && <button onClick={() => window.location.reload()} className="mt-4 text-white underline">Retry</button>}
                 </div>
             </div>
         );
@@ -273,16 +278,25 @@ export default function SubjectQuiz() {
             shuffleQuestions: true,
             shuffleOptions: true
         }]
-        : categories.length > 0
-            ? categories
-            : fallbackQuizCategory
-                ? [fallbackQuizCategory]
-                : [];
+        : isGeneratedQuiz
+            ? [{
+                id: 'general',
+                label: `${subject.name} Questions`,
+                description: `Generated Quiz from ${subject.name} Question Bank`,
+                timeLimit: undefined,
+                shuffleQuestions: true,
+                shuffleOptions: true
+            }]
+            : categories.length > 0
+                ? categories
+                : fallbackQuizCategory
+                    ? [fallbackQuizCategory]
+                    : [];
 
     return (
         <QuizPage
             title={subject.name.toUpperCase()}
-            subtitle={challengeId ? `${semester.title} Challenge` : `${semester.title} Quiz Bank`}
+            subtitle={challengeId ? `${semester.title} Challenge` : isGeneratedQuiz ? `${semester.title} Generated Quiz` : `${semester.title} Quiz Bank`}
             questions={challengeId ? challengeQuestions : questions}
             storageKey={`quiz_${semesterId}_${subjectId}_v2`}
             categories={resolvedCategories}
@@ -290,12 +304,12 @@ export default function SubjectQuiz() {
             fetchQuestions={fetchQuestionsForQuiz}
             loadingQuestions={loadingQuestions}
             subjectTitle={subject.name}
-            initialCategory={challengeId ? 'challenge' : quizId || undefined}
+            initialCategory={challengeId ? 'challenge' : (isGeneratedQuiz ? 'general' : quizId || undefined)}
             autoStart={!challengeId}
             challengeId={challengeId}
             challengeChallengerId={challengeChallengerId}
-            questionLimit={challengeId ? 10 : undefined}
-            timeLimit={challengeId ? 5 : undefined}
+            questionLimit={challengeId ? 10 : generatedQuestionLimit}
+            timeLimit={challengeId ? 5 : generatedTimeLimit}
         />
     );
 }

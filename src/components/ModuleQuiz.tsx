@@ -99,7 +99,7 @@ ${reportText}
 
             const shuffled = [...questions].sort(() => Math.random() - 0.5).slice(0, 10);
             setShuffledQuestions(shuffled);
-            setAnswers({}); // Reset answers if questions change
+            setAnswers({});
             setSubmitted(false);
             setPassed(false);
             setQuizStarted(false);

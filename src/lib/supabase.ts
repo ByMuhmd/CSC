@@ -31,6 +31,20 @@ const validateAnonKey = (key: string) => {
     if (key.length < 80 || key.split('.').length !== 3) {
         throw new Error('Invalid VITE_SUPABASE_ANON_KEY format.');
     }
+
+    try {
+        const payload = JSON.parse(atob(key.split('.')[1]));
+        if (payload.role === 'service_role') {
+            throw new Error('CRITICAL SECURITY ERROR: SERVICE_ROLE_KEY detected in client-side code! This key provides full database access and must never be exposed to the browser. Use the ANON_KEY instead.');
+        }
+        if (payload.role !== 'anon') {
+            console.warn('Warning: Supabase key role is not "anon". Current role:', payload.role);
+        }
+    } catch (e: any) {
+        if (e.message.includes('CRITICAL SECURITY ERROR')) throw e;
+        console.warn('Could not verify Supabase key role:', e.message);
+    }
+
     return key;
 };
 

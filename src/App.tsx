@@ -32,6 +32,7 @@ const DynamicCoursePage = React.lazy(() => import('./pages/DynamicCoursePage'));
 const Materials = React.lazy(() => import('./pages/Materials'));
 const Quizzes = React.lazy(() => import('./pages/Quizzes'));
 const CreateQuiz = React.lazy(() => import('./pages/CreateQuiz'));
+const CollegeRegulations = React.lazy(() => import('./pages/CollegeRegulations'));
 const NotFound = React.lazy(() => import('./pages/NotFound'));
 const SemesterSubjects = React.lazy(() => import('./pages/SemesterSubjects'));
 const SubjectMaterials = React.lazy(() => import('./pages/SubjectMaterials'));
@@ -177,6 +178,9 @@ function MainLayout({ maintenance }: { maintenance: any }) {
                     <Route path="/quizzes/:semesterId" element={<SemesterSubjects mode="quizzes" />} />
                     <Route path="/quizzes/:semesterId/:subjectId" element={<SubjectQuiz />} />
                     <Route path="/quiz/:quizId" element={<DirectQuizPage />} />
+
+                    <Route path="/gpa" element={<CollegeRegulations />} />
+                    <Route path="/gpa-calculator" element={<Navigate to="/gpa" replace />} />
 
                     <Route path="/materials/mobile-apps-course" element={<Navigate to="/course/mobile-apps" replace />} />
                     <Route path="/materials/modeling-course" element={<Navigate to="/course/modeling" replace />} />

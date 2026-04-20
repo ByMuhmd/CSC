@@ -252,7 +252,7 @@ export const useGamification = create<GamificationState>()(
                 if (state._syncTimer) clearTimeout(state._syncTimer);
 
                 const timer = setTimeout(async () => {
-                    const stateBeforeSync = get(); // Re-get state
+                    const stateBeforeSync = get();
                     const settingsToSave = {
                         ...stateBeforeSync.timerSettings,
                         history_log: stateBeforeSync.historyLog,
@@ -263,8 +263,6 @@ export const useGamification = create<GamificationState>()(
                     };
 
                     const { error } = await supabase.from('profiles').update({
-                        xp: stateBeforeSync.xp,
-                        level: stateBeforeSync.level,
                         streak: stateBeforeSync.streak,
                         last_login_date: stateBeforeSync.lastLoginDate,
                         settings: settingsToSave,
@@ -340,7 +338,7 @@ export const useGamification = create<GamificationState>()(
                         newAssignments = [...state.assignmentsCompleted, id];
                         newHistory.push({
                             id,
-                            type: 'module', // Can reuse module or just arbitrary history
+                            type: 'module',
                             title: title || 'Completed Assignment',
                             date: new Date().toISOString()
                         });
@@ -511,6 +509,21 @@ export const useGamification = create<GamificationState>()(
         }),
         {
             name: 'gamification-storage',
+            partialize: (state) => ({
+                userId: state.userId,
+                xp: state.xp,
+                level: state.level,
+                streak: state.streak,
+                lastLoginDate: state.lastLoginDate,
+                badges: state.badges,
+                modulesCompleted: state.modulesCompleted,
+                materialsCompleted: state.materialsCompleted,
+                assignmentsCompleted: state.assignmentsCompleted,
+                timerSettings: state.timerSettings,
+                historyLog: state.historyLog.slice(-50),
+                studySessions: state.studySessions.slice(-50),
+                quizResults: state.quizResults.slice(-50)
+            }),
             onRehydrateStorage: () => (state) => {
                 state?.fetchConfig();
                 const channel = supabase

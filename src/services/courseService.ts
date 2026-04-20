@@ -24,7 +24,6 @@ export const courseService = {
         let query = supabase
             .from('course_modules')
             .select(`
-                *,
                 lessons:course_lessons(
                     id, module_id, title, duration, type, order_index${includeContent ? ', content_html' : ''}
                 )

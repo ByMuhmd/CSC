@@ -12,6 +12,8 @@ import { usePushNotifications } from '../hooks/usePushNotifications';
 import { useMaintenance } from '../hooks/useMaintenance';
 import { useToast } from '../context/ToastContext';
 import { getPasswordPolicyIssues } from '../utils/security';
+import { sanitizeText } from '../utils/sanitization';
+import { handleSecureError } from '../utils/errorHandling';
 
 const AVATAR_OPTIONS = Array.from({ length: 8 }, (_, i) => `/avatars/${i + 1}.svg`);
 
@@ -336,16 +338,19 @@ export default function Profile() {
     };
 
     const handleUpdateName = async () => {
-        if (!newName.trim()) return;
+        const sanitizedName = sanitizeText(newName);
+        if (!sanitizedName) return;
         try {
             if (user) {
-                await supabase.auth.updateUser({ data: { full_name: newName } });
-                await supabase.from('profiles').update({ full_name: newName, updated_at: new Date().toISOString() }).eq('id', user.id);
-            } else if (guest) updateGuest({ full_name: newName });
+                await supabase.auth.updateUser({ data: { full_name: sanitizedName } });
+                await supabase.from('profiles').update({ full_name: sanitizedName, updated_at: new Date().toISOString() }).eq('id', user.id);
+            } else if (guest) updateGuest({ full_name: sanitizedName });
 
-            setProfileData((prev: any) => ({ ...prev, full_name: newName }));
+            setProfileData((prev: any) => ({ ...prev, full_name: sanitizedName }));
             setIsEditingName(false);
-        } catch (err) { alert("Failed to update name"); }
+        } catch (err) {
+            alert(handleSecureError(err, "فشل تحديث الاسم"));
+        }
     };
 
     const handleUpdateAvatar = async (url: string) => {
@@ -383,20 +388,38 @@ export default function Profile() {
             setProfileData((prev: any) => ({ ...prev, academic_level: levelStr }));
             setIsEditingLevel(false);
         } catch (err) {
-            alert("Failed to update academic level");
+            alert(handleSecureError(err, "فشل تحديث المستوى الأكاديمي"));
         }
     };
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files?.length || !user) return;
+        
+        const file = e.target.files[0];
+        const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+        const MAX_SIZE = 2 * 1024 * 1024;
+
+        if (!ALLOWED_TYPES.includes(file.type)) {
+            alert('Invalid file type. Only JPEG, PNG, and WebP are allowed.');
+            return;
+        }
+
+        if (file.size > MAX_SIZE) {
+            alert('File too large. Maximum size is 2MB.');
+            return;
+        }
+
         setUpdatingAvatar(true);
         try {
-            const file = e.target.files[0];
             const filePath = `${user.id}/${Math.random()}.${file.name.split('.').pop()}`;
-            await supabase.storage.from('avatars').upload(filePath, file);
+            const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file);
+            if (uploadError) throw uploadError;
+            
             const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
             await handleUpdateAvatar(publicUrl);
-        } catch (err: any) { alert(err.message); }
+        } catch (err: any) { 
+            alert(handleSecureError(err, "فشل رفع الصورة")); 
+        }
         finally { setUpdatingAvatar(false); }
     };
 
@@ -411,7 +434,9 @@ export default function Profile() {
             if (error) throw error;
             setPasswordSuccess("Password updated!");
             setTimeout(() => { setIsChangingPassword(false); setPasswordSuccess(null); setNewPassword(''); setConfirmPassword(''); }, 2000);
-        } catch (err: any) { setPasswordError(err.message); }
+        } catch (err: any) { 
+            setPasswordError(handleSecureError(err, "فشل تغيير كلمة المرور")); 
+        }
         finally { setUpdatingPassword(false); }
     };
 

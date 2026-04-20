@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Trash2, Plus, FileText, Clock, FolderOpen, ArrowRight, Loader2, BookOpen, Layers, ChevronRight, ChevronLeft, X, AlertTriangle, Upload, Download, Copy, Sparkles, Lock, Link as LinkIcon, ArrowLeft, Save, CheckCircle, Edit } from 'lucide-react';
+import { Trash2, Plus, FileText, Clock, FolderOpen, ArrowRight, Loader2, BookOpen, Layers, ChevronRight, ChevronLeft, X, AlertTriangle, Upload, Download, Copy, Sparkles, Lock, Link as LinkIcon, ArrowLeft, Save, CheckCircle, Edit, QrCode, HelpCircle } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import AdminQuizImportModal from './AdminQuizImportModal';
 import * as LucideIcons from 'lucide-react';
 import { normalizeQuizAccessCode } from '../../utils/quizAccess';
@@ -13,6 +14,8 @@ type ViewMode = 'semesters' | 'subjects' | 'quizzes' | 'detail';
 
 export default function AdminQuizzes() {
 
+    const { profile } = useAuth();
+    const { showToast } = useToast();
     const [viewMode, setViewMode] = useState<ViewMode | 'search'>('semesters');
     const [selectedSemester, setSelectedSemester] = useState<any>(null);
     const [selectedSubject, setSelectedSubject] = useState<any>(null);
@@ -40,31 +43,91 @@ export default function AdminQuizzes() {
         setSelectedSubject(null);
 
         try {
-            const { data, error } = await supabase
-                .from('questions')
-                .select(`
-                    *,
-                    quizzes (
-                        id,
-                        title,
-                        subject_id,
+            const [questionsRes, quizzesRes] = await Promise.all([
+                supabase
+                    .from('questions')
+                    .select(`
+                        quizzes (
+                            id,
+                            title,
+                            subject_id,
+                            subjects (name),
+                            profiles:submitted_by(full_name)
+                        )
+                    `)
+                    .ilike('question', `%${searchQuery}%`)
+                    .limit(20),
+                supabase
+                    .from('quizzes')
+                    .select(`
                         subjects (name),
-                        profiles:submitted_by(full_name)
-                    )
+                        questions(count)
+                    `)
+                    .ilike('title', `%${searchQuery}%`)
+                    .limit(20)
+            ]);
 
-                `)
-                .ilike('question', `%${searchQuery}%`)
-                .limit(20);
+            if (questionsRes.error) throw questionsRes.error;
+            if (quizzesRes.error) throw quizzesRes.error;
 
-            if (error) throw error;
-            setSearchResults(data || []);
+            const formattedQuizzes = (quizzesRes.data || []).map(q => ({
+                ...q,
+                isQuizResult: true,
+                question_count: q.questions?.[0]?.count || 0
+            }));
+
+            setSearchResults([...formattedQuizzes, ...(questionsRes.data || [])]);
         } catch (err) {
             console.error(err);
-            alert('Search failed');
+            showToast('Search Failed', 'An error occurred while searching for quizzes.', 'error');
         } finally {
             setLoading(false);
             setIsSearching(false);
         }
+    };
+
+    const [recentQuizzes, setRecentQuizzes] = useState<any[]>([]);
+    const [loadingRecent, setLoadingRecent] = useState(false);
+
+    const fetchRecentQuizzes = async () => {
+        setLoadingRecent(true);
+        try {
+            const { data, error } = await supabase
+                .from('quizzes')
+                .select(`
+                    subjects (name),
+                    profiles:submitted_by(full_name),
+                    questions(count)
+                `)
+                .order('created_at', { ascending: false })
+                .limit(6);
+            
+            if (error) {
+                console.warn('Recent quizzes fetch with profiles failed, trying simple fetch:', error);
+                const { data: simpleData, error: simpleError } = await supabase
+                    .from('quizzes')
+                    .select(`
+                        subjects (name),
+                        questions(count)
+                    `)
+                    .order('created_at', { ascending: false })
+                    .limit(6);
+                
+                if (simpleError) throw simpleError;
+                setRecentQuizzes(simpleData || []);
+            } else {
+                setRecentQuizzes(data || []);
+            }
+        } catch (err) {
+            console.error('Error fetching recent quizzes:', err);
+        } finally {
+            setLoadingRecent(false);
+        }
+    };
+
+    const getCreatorName = (quiz: any) => {
+        if (!quiz.profiles) return 'System';
+        return quiz.profiles.full_name || quiz.profiles.username || quiz.profiles.email?.split('@')[0] || 'Unknown';
     };
 
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -83,7 +146,10 @@ export default function AdminQuizzes() {
     const [quizToDelete, setQuizToDelete] = useState<string | null>(null);
 
     useEffect(() => {
-        if (viewMode === 'semesters') fetchSemesters();
+        if (viewMode === 'semesters') {
+            fetchSemesters();
+            fetchRecentQuizzes();
+        }
         if (viewMode === 'subjects' && selectedSemester) fetchSubjects();
         if (viewMode === 'quizzes' && selectedSubject) fetchQuizzes();
     }, [viewMode, selectedSemester, selectedSubject]);
@@ -96,14 +162,23 @@ export default function AdminQuizzes() {
     };
 
     const fetchSubjects = async () => {
-        setLoading(true);
         if (!selectedSemester) return;
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('subjects')
-            .select('*')
+            .select(`
+                quizzes:quizzes(id, is_published)
+            `)
             .eq('semester_id', selectedSemester.id)
             .order('name');
-        if (data) setSubjects(data);
+        
+        if (data) {
+            const transformed = data.map(sub => ({
+                ...sub,
+                published_count: (sub.quizzes || []).filter((q: any) => q.is_published).length,
+                total_quizzes: (sub.quizzes || []).length
+            }));
+            setSubjects(transformed);
+        }
         setLoading(false);
     };
 
@@ -113,7 +188,7 @@ export default function AdminQuizzes() {
 
         const { data, error } = await supabase
             .from('quizzes')
-            .select('*, questions(count), profiles:submitted_by(full_name)')
+            .select('*, questions(count)')
             .eq('subject_id', selectedSubject.id)
             .order('created_at', { ascending: false });
 
@@ -154,6 +229,19 @@ export default function AdminQuizzes() {
         setShowCreateModal(true);
     };
 
+    const handleTogglePublish = async (e: React.MouseEvent, quizId: string, currentStatus: boolean) => {
+        e.stopPropagation();
+        const { error } = await supabase
+            .from('quizzes')
+            .update({ is_published: !currentStatus })
+            .eq('id', quizId);
+
+        if (!error) {
+            setQuizzes(quizzes.map(q => q.id === quizId ? { ...q, is_published: !currentStatus } : q));
+            setRecentQuizzes(recentQuizzes.map(q => q.id === quizId ? { ...q, is_published: !currentStatus } : q));
+        }
+    };
+
     const confirmCreateQuiz = async () => {
         if (!newQuizTitle.trim()) return;
         if (!selectedSubject) return;
@@ -170,13 +258,15 @@ export default function AdminQuizzes() {
                 shuffle_questions: newQuizShuffleQuestions,
                 shuffle_options: newQuizShuffleOptions,
                 subject_id: selectedSubject.id,
-                semester_id: selectedSemester.id
+                semester_id: selectedSemester.id,
+                submitted_by: profile?.id || null
             })
-            .select()
+            .select('*, subjects(name), profiles:submitted_by(full_name), questions(count)')
             .single();
 
         if (!error && data) {
             setQuizzes([data, ...quizzes]);
+            setRecentQuizzes([data, ...recentQuizzes].slice(0, 6));
             setShowCreateModal(false);
             handleQuizClick(data.id);
         }
@@ -226,7 +316,7 @@ export default function AdminQuizzes() {
 
             fetchQuizzes();
         } catch (e: any) {
-            alert("Cloning failed: " + e.message);
+            showToast("Cloning Failed", e.message, 'error');
         } finally {
             setCreateLoading(false);
         }
@@ -258,7 +348,7 @@ export default function AdminQuizzes() {
         e.stopPropagation();
         const link = `${window.location.origin}/quiz/${quizId}`;
         navigator.clipboard.writeText(link);
-        alert(`Link copied: ${link}`);
+        showToast('Link Copied', 'Private link copied to clipboard', 'success');
     };
 
     const handleBack = () => {
@@ -291,405 +381,442 @@ export default function AdminQuizzes() {
     }
 
     return (
-        <div className="space-y-8 pb-10 relative h-[calc(100vh-100px)]">
+        <div className="min-h-screen pb-20 space-y-8 animate-in fade-in duration-700">
+            <div className="relative group">
+                <div className="absolute -inset-1 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-3xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+                <div className="relative bg-[#0A0C10]/80 border border-white/5 p-8 rounded-3xl backdrop-blur-xl shadow-2xl overflow-hidden">
+                    <div className="absolute top-0 right-0 p-8 opacity-5">
+                        <BookOpen size={180} />
+                    </div>
+                    
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 relative z-10">
+                        <div>
+                            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.3em] text-purple-500 mb-4">
+                                <span className="cursor-pointer hover:text-white transition-colors" onClick={() => { setViewMode('semesters'); setSelectedSemester(null); setSelectedSubject(null); }}>Academy</span>
+                                {selectedSemester && (
+                                    <>
+                                        <ChevronRight size={10} className="text-gray-700" />
+                                        <span className="cursor-pointer hover:text-white transition-colors" onClick={() => { setViewMode('subjects'); setSelectedSubject(null); }}>{selectedSemester.title}</span>
+                                    </>
+                                )}
+                                {selectedSubject && (
+                                    <>
+                                        <ChevronRight size={10} className="text-gray-700" />
+                                        <span className="text-white">{selectedSubject.name}</span>
+                                    </>
+                                )}
+                            </div>
+                            
+                            <h1 className="text-5xl font-black text-white tracking-tighter mb-2">
+                                {viewMode === 'semesters' ? 'Quiz Management' : 
+                                 viewMode === 'subjects' ? selectedSemester?.title :
+                                 viewMode === 'quizzes' ? selectedSubject?.name :
+                                 viewMode === 'search' ? 'Global Search' : 'Editor'}
+                            </h1>
+                            <p className="text-gray-500 text-lg font-medium max-w-xl">
+                                {viewMode === 'semesters' ? 'Select a semester to manage its academic subjects and quizzes.' : 
+                                 viewMode === 'subjects' ? `Managing subjects for ${selectedSemester?.title}.` :
+                                 `Curating quizzes for ${selectedSubject?.name}.`}
+                            </p>
+                        </div>
 
-            <div className="flex flex-col gap-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
-                            Quiz Manager
-                        </h1>
+                        <div className="flex flex-wrap items-center gap-4">
+                            <form onSubmit={handleSearch} className="relative group/search w-full sm:w-80">
+                                <LucideIcons.Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within/search:text-purple-400 transition-colors" size={18} />
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="Search database..."
+                                    className="w-full pl-12 pr-6 py-4 bg-black/40 border border-white/10 rounded-2xl text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/50 transition-all shadow-inner"
+                                />
+                            </form>
 
-                        <div className="flex items-center gap-2 text-sm font-medium mt-4 text-gray-400">
-                            <span
-                                onClick={() => { setSelectedSemester(null); setViewMode('semesters'); setSearchQuery(''); }}
-                                className={`cursor-pointer hover:text-white transition-colors ${viewMode === 'semesters' ? 'text-white' : ''}`}
-                            >
-                                Semesters
-                            </span>
-
-                            {viewMode === 'search' && (
-                                <>
-                                    <ChevronRight size={14} />
-                                    <span className="text-white">Search Results</span>
-                                </>
+                            {viewMode === 'quizzes' && (
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setImportModalMode('ai')}
+                                        className="p-4 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-2xl transition-all border border-purple-500/20 group/btn"
+                                        title="AI Import"
+                                    >
+                                        <Sparkles size={22} className="group-hover/btn:scale-110 transition-transform" />
+                                    </button>
+                                    <button
+                                        onClick={openCreateModal}
+                                        className="flex items-center gap-3 px-8 py-4 bg-white text-black hover:bg-gray-200 rounded-2xl font-black transition-all shadow-xl active:scale-95"
+                                    >
+                                        <Plus size={20} />
+                                        <span>Create New</span>
+                                    </button>
+                                </div>
                             )}
                         </div>
                     </div>
-
-                    <form onSubmit={handleSearch} className="w-full md:w-96 relative group">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <LucideIcons.Search className="h-5 w-5 text-gray-500 group-focus-within:text-purple-500 transition-colors" />
-                        </div>
-                        <input
-                            type="text"
-                            className="block w-full pl-10 pr-3 py-3 border border-white/10 rounded-xl leading-5 bg-black/40 text-gray-300 placeholder-gray-600 focus:outline-none focus:bg-white/5 focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 sm:text-sm transition-all shadow-lg"
-                            placeholder="Search questions database..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </form>
-                </div>
-
-                <div className="flex gap-3 justify-between items-center">
-
-                    {viewMode !== 'semesters' ? (
-                        <button
-                            onClick={handleBack}
-                            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg font-bold transition-all"
-                        >
-                            <ChevronLeft size={18} />
-                            Back
-                        </button>
-                    ) : (
-
-                        <div className="flex gap-3">
-
-                        </div>
-                    )}
-
-                    {viewMode === 'quizzes' && (
-                        <div className="ml-auto flex gap-3">
-                            <button
-                                onClick={() => setImportModalMode('ai')}
-                                className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-500/10 to-blue-500/10 hover:from-purple-500/20 hover:to-blue-500/20 border border-purple-500/20 text-purple-300 rounded-xl font-bold transition-all"
-                            >
-                                <Sparkles size={18} />
-                                <span className="hidden md:inline">Magic Create</span>
-                            </button>
-                            <button
-                                onClick={() => setImportModalMode('csv')}
-                                className="flex items-center gap-2 px-4 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold transition-all border border-white/10"
-                            >
-                                <Upload size={18} />
-                                <span className="hidden md:inline">Import</span>
-                            </button>
-                            <button
-                                onClick={openCreateModal}
-                                className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-purple-900/20 hover:scale-105 active:scale-95"
-                            >
-                                <Plus size={20} />
-                                <span>New Quiz</span>
-                            </button>
-                        </div>
-                    )}
                 </div>
             </div>
 
             {loading ? (
-                <div className="flex justify-center py-20"><Loader2 className="animate-spin text-purple-500 w-10 h-10" /></div>
+                <div className="flex flex-col items-center justify-center py-32 gap-4">
+                    <Loader2 className="animate-spin text-purple-500 w-12 h-12" />
+                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs animate-pulse">Synchronizing Data...</p>
+                </div>
             ) : (
-                <>
-
+                <div className="space-y-12">
                     {viewMode === 'semesters' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {semesters.map(sem => (
-                                <div
-                                    key={sem.id}
-                                    onClick={() => handleSemesterClick(sem)}
-                                    className="bg-[#0A0C10]/80 border border-white/5 p-8 rounded-2xl hover:border-purple-500/30 hover:bg-white/5 transition-all group cursor-pointer relative overflow-hidden"
-                                >
-                                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                        <Layers size={100} />
-                                    </div>
-                                    <h3 className="text-2xl font-bold text-white mb-2">{sem.title}</h3>
-                                    <p className="text-gray-500 relative z-10">{sem.description}</p>
-                                    <div className="mt-6 flex items-center gap-2 text-purple-400 font-bold text-sm">
-                                        <span>Select Semester</span>
-                                        <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                                    </div>
+                        <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+                            <div className="xl:col-span-3 space-y-6">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                                        <Clock className="text-purple-500" />
+                                        Recent Quizzes
+                                    </h2>
                                 </div>
-                            ))}
-                        </div>
-                    )}
-
-                    {viewMode === 'subjects' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {subjects.length === 0 ? (
-                                <div className="col-span-3 text-center py-20 text-gray-500">No subjects found in this semester.</div>
-                            ) : (
-                                subjects.map(sub => (
-                                    <div
-                                        key={sub.id}
-                                        onClick={() => handleSubjectClick(sub)}
-                                        className="bg-[#0A0C10]/80 border border-white/5 p-6 rounded-2xl hover:border-purple-500/30 hover:bg-white/5 transition-all group cursor-pointer flex items-center gap-4"
-                                    >
-                                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-white/5 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
-                                            <RenderIcon name={sub.icon_name} className="w-7 h-7" />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-xl font-bold text-white group-hover:text-purple-300 transition-colors">{sub.name}</h3>
-                                            <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
-                                                <span>View Quizzes</span>
-                                                <ArrowRight size={12} />
-                                            </p>
-                                        </div>
+                                
+                                {loadingRecent ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {[1, 2, 3].map(i => <div key={i} className="h-48 bg-white/5 rounded-3xl animate-pulse border border-white/5" />)}
                                     </div>
-                                ))
-                            )}
-                        </div>
-                    )}
-
-                    {viewMode === 'search' && (
-                        <div>
-                            <div className="flex items-center gap-3 mb-6">
-                                <h2 className="text-xl font-bold text-white">Search Results</h2>
-                                <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-bold text-gray-400">{searchResults.length} found</span>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-4">
-                                {searchResults.length === 0 ? (
-                                    <div className="text-center py-20 text-gray-500 bg-white/5 rounded-2xl border border-white/5 border-dashed">
-                                        <LucideIcons.Search className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                                        <p>No questions found matching "{searchQuery}"</p>
+                                ) : recentQuizzes.length > 0 ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {recentQuizzes.map(quiz => (
+                                            <div
+                                                key={quiz.id}
+                                                onClick={() => handleQuizClick(quiz.id)}
+                                                className="group cursor-pointer relative bg-[#0A0C10] border border-white/5 p-6 rounded-3xl hover:border-purple-500/40 hover:bg-white/5 transition-all duration-500"
+                                            >
+                                                <div className="flex justify-between items-start mb-6">
+                                                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform duration-500">
+                                                        <FileText size={22} />
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <button
+                                                            onClick={(e) => handleTogglePublish(e, quiz.id, quiz.is_published)}
+                                                            className={`p-2 rounded-xl transition-all ${quiz.is_published ? 'text-emerald-400 bg-emerald-500/10' : 'text-gray-500 bg-white/5 hover:text-white'}`}
+                                                        >
+                                                            {quiz.is_published ? <LucideIcons.Eye size={16} /> : <LucideIcons.EyeOff size={16} />}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <h3 className="text-xl font-bold text-white mb-2 line-clamp-1 group-hover:text-purple-300 transition-colors">{quiz.title}</h3>
+                                                <div className="flex flex-col gap-1 mb-6">
+                                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{quiz.subjects?.name || 'General'}</span>
+                                                    <span className="text-[10px] font-black text-purple-500 uppercase tracking-widest">By: {getCreatorName(quiz)}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between pt-4 border-t border-white/5 text-[9px] font-black text-gray-600 uppercase tracking-tighter">
+                                                    <span className="flex items-center gap-1"><FolderOpen size={12} /> {quiz.questions?.[0]?.count || 0} Questions</span>
+                                                    <span>{new Date(quiz.created_at).toLocaleDateString()}</span>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 ) : (
-                                    searchResults.map((result: any) => (
-                                        <div
-                                            key={result.id}
-                                            onClick={() => {
-                                                if (result.quizzes) {
-
-                                                    handleQuizClick(result.quizzes.id, result.id);
-                                                }
-                                            }}
-                                            className="bg-[#0A0C10]/80 border border-white/5 p-6 rounded-2xl hover:border-purple-500/30 hover:bg-white/5 transition-all group cursor-pointer flex items-center justify-between gap-4"
-                                        >
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">
-                                                    <span className="text-purple-400">{result.quizzes?.subjects?.name || 'Unknown Subject'}</span>
-                                                    <ChevronRight size={12} />
-                                                    <span>
-                                                        {result.quizzes?.title || 'Unknown Quiz'}
-                                                        {result.quizzes?.profiles?.full_name && (
-                                                            <span className="ml-1 text-[9px] text-purple-400 opacity-80">
-                                                                (By: {result.quizzes.profiles.full_name})
-                                                            </span>
-                                                        )}
-                                                    </span>
-
-                                                </div>
-                                                <h3 className="text-lg font-bold text-gray-200 group-hover:text-white line-clamp-2">{result.question}</h3>
-                                            </div>
-
-                                            <div className="flex items-center gap-4">
-                                                <span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase ${result.type === 'mcq' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
-                                                    }`}>
-                                                    {result.type}
-                                                </span>
-                                                <ArrowRight className="text-gray-600 group-hover:text-white transition-colors" size={20} />
-                                            </div>
-                                        </div>
-                                    ))
+                                    <div className="bg-white/5 border border-dashed border-white/10 rounded-3xl py-12 text-center text-gray-500 font-bold uppercase tracking-widest text-xs">No recent activity detected.</div>
                                 )}
+                            </div>
+                            
+                            <div className="space-y-6">
+                                <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                                    <AlertTriangle className="text-amber-500" />
+                                    Analytics
+                                </h2>
+                                <div className="bg-gradient-to-br from-purple-600 to-blue-600 p-6 rounded-3xl shadow-xl shadow-purple-900/20 text-white group cursor-default">
+                                    <p className="text-xs font-black uppercase tracking-widest opacity-70">Knowledge Density</p>
+                                    <div className="text-5xl font-black mt-2 tracking-tighter group-hover:scale-105 transition-transform duration-500">
+                                        {semesters.length}
+                                    </div>
+                                    <p className="text-sm font-medium mt-1 opacity-90">Active Semesters</p>
+                                    <div className="mt-8 pt-8 border-t border-white/20 grid grid-cols-2 gap-4">
+                                        <div>
+                                            <p className="text-2xl font-black tracking-tighter">{recentQuizzes.filter(q => q.is_published).length}</p>
+                                            <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">Published</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-2xl font-black tracking-tighter">{recentQuizzes.filter(q => !q.is_published).length}</p>
+                                            <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">Drafts</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
 
-                    {viewMode === 'quizzes' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {quizzes.length === 0 ? (
-                                <div className="md:col-span-3 text-center py-20 text-gray-500 flex flex-col items-center gap-4">
-                                    <FolderOpen className="w-12 h-12 opacity-50" />
-                                    <p>No quizzes found for {selectedSubject?.name}. Create one to get started.</p>
-                                </div>
-                            ) : (
-                                quizzes.map(quiz => (
+                    <div className="space-y-8">
+                        {viewMode === 'semesters' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                {semesters.map(semester => (
+                                    <div
+                                        key={semester.id}
+                                        onClick={() => handleSemesterClick(semester)}
+                                        className="group relative bg-[#0A0C10] border border-white/5 p-10 rounded-[2.5rem] hover:border-purple-500/30 hover:bg-white/5 transition-all duration-500 cursor-pointer overflow-hidden"
+                                    >
+                                        <div className="absolute top-0 right-0 p-12 text-white/5 group-hover:text-white/10 group-hover:scale-110 transition-all duration-700">
+                                            <Layers size={140} />
+                                        </div>
+                                        <div className="relative z-10">
+                                            <div className="w-16 h-16 rounded-3xl bg-white/5 flex items-center justify-center text-purple-400 mb-8 group-hover:bg-purple-500 group-hover:text-white transition-all duration-500 shadow-xl">
+                                                <Layers size={32} />
+                                            </div>
+                                            <h3 className="text-3xl font-black text-white mb-4 tracking-tight group-hover:translate-x-2 transition-transform duration-500">{semester.title}</h3>
+                                            <div className="flex items-center gap-4 text-xs font-bold text-gray-500 uppercase tracking-widest mb-10">
+                                                <span>{semester.subject_count} Subjects</span>
+                                                <span className="w-1 h-1 rounded-full bg-gray-700" />
+                                                <span>{semester.total_quizzes} Quizzes</span>
+                                            </div>
+                                            <div className="flex items-center gap-3 text-purple-400 font-black text-xs uppercase tracking-widest">
+                                                <span>Explore Topics</span>
+                                                <ArrowRight size={18} className="group-hover:translate-x-3 transition-transform duration-500" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {viewMode === 'subjects' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                {subjects.map(subject => (
+                                    <div
+                                        key={subject.id}
+                                        onClick={() => handleSubjectClick(subject)}
+                                        className="group relative bg-[#0A0C10] border border-white/5 p-10 rounded-[2.5rem] hover:border-purple-500/30 hover:bg-white/5 transition-all duration-500 cursor-pointer overflow-hidden"
+                                    >
+                                        <div className="absolute top-0 right-0 p-12 text-white/5 group-hover:text-white/10 group-hover:scale-110 transition-all duration-700">
+                                            <BookOpen size={140} />
+                                        </div>
+                                        <div className="relative z-10">
+                                            <div className="w-16 h-16 rounded-3xl bg-white/5 flex items-center justify-center text-purple-400 mb-8 group-hover:bg-purple-500 group-hover:text-white transition-all duration-500 shadow-xl">
+                                                <BookOpen size={32} />
+                                            </div>
+                                            <h3 className="text-3xl font-black text-white mb-4 tracking-tight group-hover:translate-x-2 transition-transform duration-500">{subject.name}</h3>
+                                            <div className="flex items-center gap-4 text-xs font-bold text-gray-500 uppercase tracking-widest mb-10">
+                                                <span>{subject.total_quizzes} Quizzes</span>
+                                                <span className="w-1 h-1 rounded-full bg-gray-700" />
+                                                <span className="text-emerald-500">{subject.published_count} Published</span>
+                                            </div>
+                                            <div className="flex items-center gap-3 text-purple-400 font-black text-xs uppercase tracking-widest">
+                                                <span>Manage Quizzes</span>
+                                                <ArrowRight size={18} className="group-hover:translate-x-3 transition-transform duration-500" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {viewMode === 'quizzes' && (
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                {quizzes.map((quiz, index) => (
                                     <div
                                         key={quiz.id}
                                         onClick={() => handleQuizClick(quiz.id)}
-                                        className="bg-[#0A0C10]/80 border border-white/5 p-6 rounded-2xl hover:border-purple-500/30 hover:bg-white/5 transition-all group cursor-pointer relative overflow-hidden flex flex-col h-full"
+                                        className={`group relative overflow-hidden bg-[#0A0C10] border border-white/5 rounded-[32px] hover:border-purple-500/30 hover:bg-white/5 transition-all duration-500 cursor-pointer flex flex-col justify-between ${
+                                            index % 5 === 0 ? 'md:col-span-2 md:row-span-1 h-72' : 'md:col-span-1 h-72'
+                                        }`}
                                     >
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div className="p-3 bg-white/5 rounded-xl text-purple-400 group-hover:scale-110 transition-transform">
-                                                <FileText size={24} />
+                                        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                                        <div className="absolute right-0 bottom-0 w-32 h-32 bg-purple-500/10 blur-[60px] rounded-full group-hover:bg-purple-500/20 transition-colors pointer-events-none" />
+
+                                        <div className="p-8 relative z-10 flex flex-col h-full justify-between">
+                                            <div className="flex justify-between items-start">
+                                                <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-purple-400 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 shadow-xl">
+                                                    <FileText size={28} />
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setShowQRModal(true); setSelectedQuizId(quiz.id); }}
+                                                        className="p-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-gray-500 hover:text-white transition-all border border-white/5"
+                                                        title="QR Code"
+                                                    >
+                                                        <QrCode size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => handleCloneQuiz(e, quiz.id)}
+                                                        className="p-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-gray-500 hover:text-white transition-all border border-white/5"
+                                                        title="Clone"
+                                                    >
+                                                        <Copy size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => openDeleteModal(e, quiz.id)}
+                                                        className="p-2.5 bg-white/5 hover:bg-red-500/10 rounded-xl text-gray-600 hover:text-red-400 transition-all border border-white/5"
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-1 z-10">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedQuizId(quiz.id);
-                                                        setShowQRModal(true);
-                                                    }}
-                                                    className="p-2 text-gray-500 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                                                    title="Show QR Code"
-                                                >
-                                                    <LucideIcons.QrCode size={18} />
-                                                </button>
-                                                <button
-                                                    onClick={(e) => handleCloneQuiz(e, quiz.id)}
-                                                    className="p-2 text-gray-500 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                                                    title="Clone Quiz"
-                                                >
-                                                    <Copy size={18} />
-                                                </button>
-                                                <button
-                                                    onClick={(e) => openDeleteModal(e, quiz.id)}
-                                                    className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                                                    title="Delete Quiz"
-                                                >
-                                                    <Trash2 size={18} />
-                                                </button>
+
+                                            <div>
+                                                <h3 className="text-2xl font-black text-white mb-2 line-clamp-1 group-hover:text-purple-300 transition-colors tracking-tight">{quiz.title}</h3>
+                                                <p className="text-gray-500 text-sm font-medium line-clamp-2">{quiz.description || 'No description provided.'}</p>
+                                            </div>
+
+                                            <div className="flex items-center justify-between pt-6 border-t border-white/5 mt-4">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className={`w-2.5 h-2.5 rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)] ${quiz.is_published ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
+                                                        {quiz.is_published ? 'Live' : 'Draft'}
+                                                    </span>
+                                                </div>
+                                                <span className="px-3 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[10px] font-black uppercase tracking-[0.15em] text-purple-400">
+                                                    {quiz.question_count} Qs
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {quizzes.length === 0 && (
+                                    <div className="col-span-full py-20 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-[3rem] bg-white/[0.01]">
+                                        <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center text-gray-600 mb-6">
+                                            <AlertTriangle size={40} />
+                                        </div>
+                                        <h3 className="text-2xl font-black text-white mb-2">No Quizzes Found</h3>
+                                        <p className="text-gray-500 font-medium mb-8">This subject doesn't have any quizzes yet.</p>
+                                        <button
+                                            onClick={openCreateModal}
+                                            className="flex items-center gap-3 px-8 py-4 bg-purple-600 text-white hover:bg-purple-500 rounded-2xl font-black transition-all shadow-xl active:scale-95"
+                                        >
+                                            <Plus size={20} />
+                                            <span>Create First Quiz</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {viewMode === 'search' && (
+                            <div className="space-y-6">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h2 className="text-2xl font-black text-white">Search Results</h2>
+                                    <button onClick={() => setViewMode('semesters')} className="text-purple-400 font-bold flex items-center gap-2 hover:text-purple-300">
+                                        <X size={18} /> Clear Search
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {searchResults.map((result, idx) => (
+                                        <div
+                                            key={result.id || idx}
+                                            onClick={() => handleQuizClick(result.isQuizResult ? result.id : result.quiz_id, !result.isQuizResult ? result.id : undefined)}
+                                            className="group relative bg-[#0A0C10] border border-white/5 p-6 rounded-3xl hover:border-purple-500/30 hover:bg-white/5 transition-all duration-500 cursor-pointer"
+                                        >
+                                            {result.isQuizResult ? (
+                                                <>
+                                                    <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400 mb-4">
+                                                        <FileText size={22} />
+                                                    </div>
+                                                    <h3 className="text-lg font-bold text-white mb-1 line-clamp-1">Quiz: {result.title}</h3>
+                                                    <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">{result.subjects?.name}</p>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 mb-4">
+                                                        <HelpCircle size={22} />
+                                                    </div>
+                                                    <h3 className="text-lg font-bold text-white mb-1 line-clamp-2">{result.question}</h3>
+                                                    <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">In: {result.quizzes?.title}</p>
+                                                </>
+                                            )}
+                                        </div>
+                                    ))}
+                                    {searchResults.length === 0 && !isSearching && (
+                                        <div className="col-span-full py-20 text-center text-gray-500 font-bold uppercase tracking-widest text-xs">No results found for "{searchQuery}".</div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {showCreateModal && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowCreateModal(false)} />
+                                <div className="relative bg-[#0F1115] border border-white/10 rounded-3xl w-full max-w-xl shadow-2xl animate-in fade-in zoom-in-95 overflow-hidden">
+                                    <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
+                                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                                            <Plus className="text-purple-500" />
+                                            Create New Quiz
+                                        </h2>
+                                        <button onClick={() => setShowCreateModal(false)} className="text-gray-500 hover:text-white transition-colors">
+                                            <X size={20} />
+                                        </button>
+                                    </div>
+                                    <div className="p-8 space-y-6">
+                                        <div className="space-y-2">
+                                            <label className="block text-xs font-bold text-gray-500 uppercase">Quiz Title</label>
+                                            <input
+                                                type="text"
+                                                value={newQuizTitle}
+                                                onChange={(e) => setNewQuizTitle(e.target.value)}
+                                                className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white placeholder-gray-600 focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 outline-none transition-all font-bold"
+                                                placeholder="Enter quiz title..."
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="block text-xs font-bold text-gray-500 uppercase">Description (Optional)</label>
+                                            <textarea
+                                                rows={3}
+                                                value={newQuizDescription}
+                                                onChange={(e) => setNewQuizDescription(e.target.value)}
+                                                className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white placeholder-gray-600 focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 outline-none transition-all text-sm"
+                                                placeholder="Brief instructions or summary..."
+                                            />
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <label className="block text-xs font-bold text-gray-500 uppercase">Time Limit (Min)</label>
+                                                <input
+                                                    type="number"
+                                                    value={newQuizTimeLimit}
+                                                    onChange={(e) => setNewQuizTimeLimit(parseInt(e.target.value) || 0)}
+                                                    className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white font-mono"
+                                                    placeholder="0 for unlimited"
+                                                />
+                                            </div>
+                                            <div className="flex flex-col justify-end gap-2 pb-1">
+                                                <label className="flex items-center gap-3 cursor-pointer group">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={newQuizIsPrivate}
+                                                        onChange={(e) => setNewQuizIsPrivate(e.target.checked)}
+                                                        className="w-5 h-5 rounded border-white/10 bg-black/40 text-purple-500 focus:ring-purple-500/50"
+                                                    />
+                                                    <span className="text-xs font-bold text-gray-400 uppercase group-hover:text-white transition-colors">Private Quiz</span>
+                                                </label>
                                             </div>
                                         </div>
 
-                                        <h3 className="text-xl font-bold text-white mb-2 group-hover:text-purple-300 transition-colors line-clamp-1">{quiz.title}</h3>
-                                        {quiz.profiles?.full_name && (
-                                            <p className="text-[10px] text-purple-400 font-bold uppercase tracking-wider mb-2">
-                                                By: {quiz.profiles.full_name}
-                                            </p>
-                                        )}
-
-                                        {quiz.is_private && (
-                                            <div className="mb-2">
-                                                <span className="bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider flex items-center gap-1 w-max">
-                                                    <Lock size={10} /> Private
-                                                </span>
-                                            </div>
-                                        )}
-                                        <p className="text-sm text-gray-500 mb-6 line-clamp-2">{quiz.description || 'No description provided.'}</p>
-
-                                        <div className="mt-auto flex items-center justify-between text-xs font-bold text-gray-400 uppercase tracking-wider border-t border-white/5 pt-4">
-                                            <div className="flex items-center gap-3">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        navigator.clipboard.writeText(quiz.id);
-                                                        alert("Quiz ID copied!");
-                                                    }}
-                                                    className="hover:text-white transition-colors"
-                                                    title="Click to copy ID"
-                                                >
-                                                    ID: {quiz.id.substring(0, 8)}...
-                                                </button>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <button
-                                                    onClick={(e) => copyPrivateLink(e, quiz.id)}
-                                                    className="flex items-center gap-1 hover:text-white transition-colors"
-                                                    title="Copy Direct Link"
-                                                >
-                                                    <LinkIcon size={14} />
-                                                </button>
-                                                <span className="flex items-center gap-1">
-                                                    <FolderOpen size={14} />
-                                                    {quiz.question_count}
-                                                </span>
-                                            </div>
-                                            <span className="flex items-center gap-2">
-                                                <Clock size={14} />
-                                                {quiz.time_limit || '∞'}m
-                                            </span>
+                                        <div className="grid grid-cols-2 gap-4 py-4 border-y border-white/5">
+                                            <label className="flex items-center gap-3 cursor-pointer group">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={newQuizShuffleQuestions}
+                                                    onChange={(e) => setNewQuizShuffleQuestions(e.target.checked)}
+                                                    className="w-5 h-5 rounded border-white/10 bg-black/40 text-purple-500 focus:ring-purple-500/50"
+                                                />
+                                                <span className="text-xs font-bold text-gray-400 uppercase group-hover:text-white transition-colors">Shuffle Questions</span>
+                                            </label>
+                                            <label className="flex items-center gap-3 cursor-pointer group">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={newQuizShuffleOptions}
+                                                    onChange={(e) => setNewQuizShuffleOptions(e.target.checked)}
+                                                    className="w-5 h-5 rounded border-white/10 bg-black/40 text-purple-500 focus:ring-purple-500/50"
+                                                />
+                                                <span className="text-xs font-bold text-gray-400 uppercase group-hover:text-white transition-colors">Shuffle Options</span>
+                                            </label>
                                         </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    )}
-                </>
-            )}
 
-            {showCreateModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowCreateModal(false)} />
-                    <div className="relative bg-[#0F1115] border border-white/10 rounded-3xl w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95">
-                        <div className="p-6 border-b border-white/10 flex justify-between items-center">
-                            <h2 className="text-xl font-bold text-white">Create New Quiz</h2>
-                            <button onClick={() => setShowCreateModal(false)} className="text-gray-500 hover:text-white transition-colors">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <div className="space-y-2">
-                                <label className="block text-xs font-bold text-gray-500 uppercase">Quiz Title</label>
-                                <input
-                                    autoFocus
-                                    type="text"
-                                    value={newQuizTitle}
-                                    onChange={(e) => setNewQuizTitle(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white placeholder-gray-600 focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 outline-none transition-all"
-                                    placeholder="e.g. Midterm Process Exam"
-                                    onKeyDown={(e) => e.key === 'Enter' && confirmCreateQuiz()}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="block text-xs font-bold text-gray-500 uppercase">Description (Optional)</label>
-                                <textarea
-                                    rows={3}
-                                    value={newQuizDescription}
-                                    onChange={(e) => setNewQuizDescription(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white placeholder-gray-600 focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 outline-none transition-all text-sm"
-                                    placeholder="Brief instructions or summary..."
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="block text-xs font-bold text-gray-500 uppercase">Time Limit (Minutes)</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={newQuizTimeLimit}
-                                    onChange={(e) => setNewQuizTimeLimit(Number(e.target.value))}
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white placeholder-gray-600 focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 outline-none transition-all font-mono"
-                                    placeholder="0 for unlimited"
-                                />
-                                <p className="text-[10px] text-gray-500">Leave as 0 for no time limit.</p>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 py-4 border-y border-white/5">
-                                <div className="flex items-center gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setNewQuizShuffleQuestions(!newQuizShuffleQuestions)}
-                                        className={`w-10 h-6 rounded-full p-1 transition-colors ${newQuizShuffleQuestions ? 'bg-purple-600' : 'bg-gray-600'}`}
-                                    >
-                                        <div className={`w-4 h-4 bg-white rounded-full transition-transform ${newQuizShuffleQuestions ? 'translate-x-4' : ''}`} />
-                                    </button>
-                                    <div>
-                                        <p className="text-[10px] font-bold text-white uppercase">Shuffle Questions</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setNewQuizShuffleOptions(!newQuizShuffleOptions)}
-                                        className={`w-10 h-6 rounded-full p-1 transition-colors ${newQuizShuffleOptions ? 'bg-blue-600' : 'bg-gray-600'}`}
-                                    >
-                                        <div className={`w-4 h-4 bg-white rounded-full transition-transform ${newQuizShuffleOptions ? 'translate-x-4' : ''}`} />
-                                    </button>
-                                    <div>
-                                        <p className="text-[10px] font-bold text-white uppercase">Shuffle Options</p>
+                                        <button
+                                            onClick={confirmCreateQuiz}
+                                            disabled={createLoading || !newQuizTitle.trim()}
+                                            className="w-full py-4 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl font-bold transition-all shadow-lg shadow-purple-900/20 flex items-center justify-center gap-2"
+                                        >
+                                            {createLoading ? <Loader2 className="animate-spin" /> : <Plus size={20} />}
+                                            Create Quiz
+                                        </button>
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
-                                <button
-                                    onClick={() => setNewQuizIsPrivate(!newQuizIsPrivate)}
-                                    className={`w-10 h-6 rounded-full p-1 transition-colors ${newQuizIsPrivate ? 'bg-purple-600' : 'bg-gray-600'}`}
-                                >
-                                    <div className={`w-4 h-4 bg-white rounded-full transition-transform ${newQuizIsPrivate ? 'translate-x-4' : ''}`} />
-                                </button>
-                                <div>
-                                    <p className="text-xs font-bold text-white uppercase">Private Quiz</p>
-                                    <p className="text-[10px] text-gray-500">Only accessible via direct link. Hidden from menus.</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="p-6 border-t border-white/10 flex justify-end gap-3">
-                            <button
-                                onClick={() => setShowCreateModal(false)}
-                                className="px-5 py-2.5 rounded-xl font-bold text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={confirmCreateQuiz}
-                                disabled={!newQuizTitle.trim() || createLoading}
-                                className="px-6 py-2.5 rounded-xl font-bold bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all shadow-lg shadow-purple-900/20"
-                            >
-                                {createLoading ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
-                                Create Quiz
-                            </button>
-                        </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -801,6 +928,7 @@ interface InlineDetailProps {
 }
 
 function InlineAdminQuizDetail({ quizId, onBack, initialQuestionId }: InlineDetailProps) {
+    const { showToast } = useToast();
     const [quiz, setQuiz] = useState<any>(null);
     const [questions, setQuestions] = useState<any[]>([]);
 
@@ -821,7 +949,7 @@ function InlineAdminQuizDetail({ quizId, onBack, initialQuestionId }: InlineDeta
     const [showQuestionEditor, setShowQuestionEditor] = useState(false);
     const [importModalMode, setImportModalMode] = useState<'csv' | 'ai' | null>(null);
     const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
-    const { showToast } = useToast();
+    const { profile } = useAuth();
 
     useEffect(() => {
         fetchFormData();
@@ -1247,6 +1375,7 @@ interface InlineEditorProps {
 }
 
 function InlineAdminQuizEditor({ onClose, editId, quizId }: InlineEditorProps) {
+    const { showToast } = useToast();
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
         category: 'mid_term',
@@ -1324,7 +1453,7 @@ function InlineAdminQuizEditor({ onClose, editId, quizId }: InlineEditorProps) {
 
                 if (uploadError) {
                     if (uploadError.message.includes('Bucket not found')) {
-                        alert("Error: Storage bucket 'quiz-assets' does not exist.\nPlease create a public bucket named 'quiz-assets' in your Supabase dashboard.");
+                        showToast("Bucket Error", "Storage bucket 'quiz-assets' does not exist.", 'error');
                         setLoading(false);
                         return;
                     }
@@ -1353,18 +1482,19 @@ function InlineAdminQuizEditor({ onClose, editId, quizId }: InlineEditorProps) {
             }
 
             if (editId) {
-                const { error: updateError } = await supabase.from('questions').update(payload).eq('id', editId);
-                if (updateError) throw updateError;
+                const { error } = await supabase.from('questions').update(payload).eq('id', editId);
+                if (error) throw error;
             } else {
-                const { error: insertError } = await supabase.from('questions').insert(payload);
-                if (insertError) throw insertError;
+                const { error } = await supabase.from('questions').insert(payload);
+                if (error) throw error;
             }
             onClose();
         } catch (error: any) {
-            if (error.message?.includes('row-level security')) {
-                alert("Error: Permission denied (RLS).\nYou do not have permission to modify questions. Please check your Supabase Row-Level Security policies or ensure your user has the 'admin' role.");
+            console.error("Save error:", error);
+            if (error.code === '42501') {
+                showToast("Access Denied", "Permission denied (RLS). Admin role required.", 'error');
             } else {
-                alert("Error saving question: " + (error.message || "Unknown error (400)") + "\n\nSee console (F12) for detailed payload and error JSON.");
+                showToast("Save Error", error.message || "Unknown error", 'error');
             }
         } finally {
             setLoading(false);

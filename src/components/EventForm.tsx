@@ -25,7 +25,7 @@ export function EventForm({ onClose, onSubmit, lockedType, initialData }: EventF
         lecture_time: initialData?.lecture_time || '',
         is_recurring: initialData?.is_recurring || false,
         day_of_week: initialData?.day_of_week || '',
-        academic_year: initialData?.academic_year || '' // '1', '2', '3', '4' or empty for all
+        academic_year: initialData?.academic_year || ''
     });
 
     const isEditing = !!initialData;

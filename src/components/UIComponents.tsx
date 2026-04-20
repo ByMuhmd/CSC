@@ -10,6 +10,7 @@ import { eventService, CalendarEvent } from '../services/eventService';
 import { useGamification } from '../hooks/useGamification';
 import { shouldDeliverNotification } from '../utils/notifications';
 import { useSmartSchedule } from '../hooks/useSmartSchedule';
+import { sanitizeText } from '../utils/sanitization';
 
 interface LoadingLogoProps {
     className?: string;
@@ -145,7 +146,7 @@ export function WelcomeModal() {
     };
 
     const resolveName = (fallbackName: string) => {
-        const sanitized = displayName.trim().slice(0, 60);
+        const sanitized = sanitizeText(displayName).slice(0, 60);
         return sanitized || fallbackName;
     };
 

@@ -143,7 +143,6 @@ export default function SubjectMaterials() {
             const { data, error } = await supabase
                 .from('subjects')
                 .select(`
-                    *,
                     materials (*)
                 `)
                 .eq('id', subjectId)

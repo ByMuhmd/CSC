@@ -9,6 +9,7 @@ export default {
                 arabic: ['Almarai', 'sans-serif'],
                 cairo: ['Cairo', 'sans-serif'],
                 tajawal: ['Tajawal', 'sans-serif'],
+                sans: ['Outfit', 'Inter', 'sans-serif'],
             },
             keyframes: {
                 swing: {

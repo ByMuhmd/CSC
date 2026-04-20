@@ -3,10 +3,12 @@ import { supabase } from '../../lib/supabase';
 import {
     BookOpen, Plus, Edit, Trash2, Save, X, Layers, ChevronRight,
     ArrowLeft, FileText, Video, Youtube, HardDrive, Link as LinkIcon,
-    ExternalLink, Search, Filter, Loader2, Edit2, ArrowUp, ArrowDown
+    ExternalLink, Search, Filter, Loader2, Edit2, ArrowUp, ArrowDown, Sparkles
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { courseService, CourseModule, CourseLesson } from '../../services/courseService';
+import AdminLessonImportModal from './AdminLessonImportModal';
+import { generateLessonFromTopic } from '../../services/gemini';
 
 type ViewMode = 'semesters' | 'subjects' | 'content';
 type TabMode = 'courseware' | 'resources';
@@ -379,6 +381,8 @@ function CoursewareManager({ subjectId }: { subjectId: string }) {
     const [editingLesson, setEditingLesson] = useState<Partial<CourseLesson> | null>(null);
     const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
     const [isModuleModalOpen, setIsModuleModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [aiGenerating, setAiGenerating] = useState(false);
 
     const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
     const [availableQuizzes, setAvailableQuizzes] = useState<any[]>([]);
@@ -535,6 +539,40 @@ function CoursewareManager({ subjectId }: { subjectId: string }) {
         }
     };
 
+    const handleAIGenerateContent = async () => {
+        if (!editingLesson?.title) return alert('Please enter a lesson title first');
+        setAiGenerating(true);
+        try {
+            const result = await generateLessonFromTopic('', editingLesson.title, 'educational and detailed');
+            if (result.error) alert(result.error);
+            else if (result.lessons && result.lessons.length > 0) {
+                setEditingLesson({ ...editingLesson, content_html: result.lessons[0].content });
+            }
+        } finally {
+            setAiGenerating(false);
+        }
+    };
+
+    const handleBulkImport = async (generatedLessons: any[]) => {
+        if (!editingModule?.id) return;
+        setLoading(true);
+        try {
+            const startOrder = modules.find(m => m.id === editingModule.id)?.lessons?.length || 0;
+            await Promise.all(generatedLessons.map((l, idx) => 
+                courseService.createLesson({
+                    module_id: editingModule.id!,
+                    title: l.title,
+                    content_html: l.content,
+                    duration: l.duration || 10,
+                    type: 'text',
+                    order_index: startOrder + idx
+                })
+            ));
+            fetchContent();
+        } catch (e) { alert('Error importing lessons'); }
+        finally { setLoading(false); }
+    };
+
     const isExternalQuiz = (html: string | undefined) => {
         if (!html) return false;
         return html.includes('"url":') || html.startsWith('http') || html.includes('docs.google.com');
@@ -574,6 +612,10 @@ function CoursewareManager({ subjectId }: { subjectId: string }) {
                                     <button onClick={() => { setEditingModule(module); setEditingLesson({ module_id: module.id, title: '', content_html: '', type: 'text', duration: 10, order_index: (module.lessons?.length || 0) }); setIsLessonModalOpen(true); }}
                                         className="flex items-center gap-1 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg text-xs font-bold uppercase ml-2 transition-all">
                                         <Plus size={14} /> Add Lesson
+                                    </button>
+                                    <button onClick={() => { setEditingModule(module); setIsImportModalOpen(true); }}
+                                        className="flex items-center gap-1 px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-lg text-xs font-bold uppercase text-purple-400 transition-all">
+                                        <Sparkles size={14} /> Smart Import
                                     </button>
                                 </div>
                             </div>
@@ -696,6 +738,10 @@ function CoursewareManager({ subjectId }: { subjectId: string }) {
                                 <label className="block text-xs font-bold uppercase text-gray-500 mb-2 flex justify-between items-center bg-transparent">
                                     <span>Content (HTML/Markdown/JSON)</span>
                                     <div className="flex gap-2">
+                                        <button onClick={handleAIGenerateContent} disabled={aiGenerating} className="flex items-center gap-1 text-[10px] text-emerald-400 border border-emerald-500/20 px-2 rounded hover:bg-emerald-500/10 disabled:opacity-50">
+                                            {aiGenerating ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+                                            Write with AI
+                                        </button>
                                         <button onClick={() => loadTemplate('reading')} className="text-[10px] text-purple-400 border border-purple-500/20 px-2 rounded hover:bg-purple-500/10">Reading</button>
                                         <button onClick={() => loadTemplate('video')} className="text-[10px] text-blue-400 border border-blue-500/20 px-2 rounded hover:bg-blue-500/10">Video</button>
                                     </div>
@@ -716,6 +762,12 @@ function CoursewareManager({ subjectId }: { subjectId: string }) {
                         </div>
                     </div>
                 </Modal>
+            )}
+            {isImportModalOpen && (
+                <AdminLessonImportModal 
+                    onClose={() => setIsImportModalOpen(false)} 
+                    onSuccess={handleBulkImport} 
+                />
             )}
         </div>
     );
@@ -847,14 +899,14 @@ function ResourcesManager({ subjectId }: { subjectId: string }) {
 
 function Modal({ title, children, onClose, size = 'md' }: { title: string, children: React.ReactNode, onClose: () => void, size?: 'md' | 'lg' }) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-            <div className={`relative bg-[#0F1115] border border-white/10 rounded-3xl w-full ${size === 'lg' ? 'max-w-2xl' : 'max-w-lg'} shadow-2xl animate-in fade-in zoom-in-95`}>
-                <div className="p-6 border-b border-white/10 flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-white">{title}</h2>
-                    <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={20} /></button>
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 pointer-events-auto">
+            <div className="absolute inset-0 bg-black/95 backdrop-blur-xl" onClick={onClose} />
+            <div className={`relative bg-[#0F1115] border border-white/10 rounded-[2rem] w-full ${size === 'lg' ? 'max-w-4xl' : 'max-w-xl'} shadow-2xl animate-in fade-in zoom-in-95 overflow-hidden`}>
+                <div className="p-8 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+                    <h2 className="text-2xl font-black text-white">{title}</h2>
+                    <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-xl text-gray-500 hover:text-white transition-all hover:rotate-90"><X size={24} /></button>
                 </div>
-                <div className="p-6">{children}</div>
+                <div className="p-8 max-h-[80vh] overflow-y-auto custom-scrollbar">{children}</div>
             </div>
         </div>
     );

@@ -7,6 +7,7 @@ import { Notifications as NotificationBell } from '../../components/UIComponents
 export default function AdminLayout() {
     const auth = useOptionalAuth();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
     if (!auth) {
         return (
@@ -111,7 +112,7 @@ export default function AdminLayout() {
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
     return (
-        <div className="min-h-screen bg-[#050505] text-white flex flex-col md:flex-row overflow-hidden relative">
+        <div className="min-h-screen bg-[#050505] text-white flex flex-col md:flex-row relative overflow-x-hidden">
 
             <div className="fixed inset-0 pointer-events-none z-0">
                 <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-900/10 rounded-full blur-[120px] mix-blend-screen" />
@@ -145,9 +146,9 @@ export default function AdminLayout() {
             )}
 
             <aside className={`
-                w-72 bg-black/40 backdrop-blur-xl border-r border-white/5 flex flex-col 
-                fixed md:sticky inset-y-0 left-0 z-50 h-screen shadow-2xl transition-transform duration-300 ease-in-out
-                overflow-y-auto custom-scrollbar
+                ${isSidebarCollapsed ? 'w-20' : 'w-72'} bg-[#08090D] border-r border-white/5 flex flex-col 
+                fixed inset-y-0 left-0 z-50 h-screen transition-all duration-300 ease-in-out
+                overflow-y-auto overflow-x-hidden custom-scrollbar
                 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
             `}>
                 <div className="min-h-full flex flex-col">
@@ -156,21 +157,25 @@ export default function AdminLayout() {
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 via-indigo-500 to-blue-500 opacity-50" />
 
                     <div className="flex items-center gap-4 mb-2 relative z-10">
-                        <div className="group-hover:scale-105 transition-transform duration-500">
+                        <div className="group-hover:scale-105 transition-transform duration-500 shrink-0">
                             <img src="/favicon.png" alt="Logo" className="w-10 h-10 object-contain drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]" />
                         </div>
-                        <div className="flex flex-col">
-                            <h1 className="font-black text-2xl tracking-tighter text-white flex items-center gap-1 leading-none">
-                                Admin
-                            </h1>
-                            <span className="text-xs font-bold text-purple-400 tracking-[0.2em] uppercase">Console</span>
-                        </div>
+                        {!isSidebarCollapsed && (
+                            <div className="flex flex-col animate-in fade-in slide-in-from-left-2 duration-300">
+                                <h1 className="font-black text-2xl tracking-tighter text-white flex items-center gap-1 leading-none">
+                                    Admin
+                                </h1>
+                                <span className="text-xs font-bold text-purple-400 tracking-[0.2em] uppercase">Console</span>
+                            </div>
+                        )}
                     </div>
 
-                    <div className="mt-4 flex items-center gap-2 px-3 py-1.5 bg-red-500/5 border border-red-500/10 rounded-lg w-fit group-hover:bg-red-500/10 transition-colors">
-                        <ShieldAlert size={12} className="text-red-500" />
-                        <span className="text-[10px] uppercase font-bold text-red-400/80 tracking-wider">Restricted Access</span>
-                    </div>
+                    {!isSidebarCollapsed && (
+                        <div className="mt-4 flex items-center gap-2 px-3 py-1.5 bg-red-500/5 border border-red-500/10 rounded-lg w-fit group-hover:bg-red-500/10 transition-colors animate-in fade-in zoom-in-95">
+                            <ShieldAlert size={12} className="text-red-500" />
+                            <span className="text-[10px] uppercase font-bold text-red-400/80 tracking-wider">Restricted Access</span>
+                        </div>
+                    )}
 
                     <button
                         onClick={() => setIsSidebarOpen(false)}
@@ -180,8 +185,8 @@ export default function AdminLayout() {
                     </button>
                 </div>
 
-                <nav className="flex-1 p-4 space-y-2">
-                    <p className="px-4 text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 mt-2">Menu</p>
+                <nav className="flex-1 p-4 space-y-2 overflow-x-hidden">
+                    {!isSidebarCollapsed && <p className="px-4 text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 mt-2 animate-in fade-in">Menu</p>}
                     {adminNavItems.map((item) => (
                         <NavLink
                             key={item.path}
@@ -189,7 +194,7 @@ export default function AdminLayout() {
                             end={item.end}
                             onClick={() => setIsSidebarOpen(false)}
                             className={({ isActive }) => `
-                                relative group flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300
+                                relative group flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3.5 rounded-xl transition-all duration-300
                                 ${isActive
                                     ? 'bg-gradient-to-r from-purple-600/20 via-purple-600/10 to-transparent text-white border border-purple-500/20'
                                     : 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -198,9 +203,9 @@ export default function AdminLayout() {
                         >
                             {({ isActive }) => (
                                 <>
-                                    <item.icon size={20} className={`transition-colors ${isActive ? 'text-purple-400' : 'text-gray-500 group-hover:text-gray-300'}`} />
-                                    <span className={`font-medium tracking-wide ${isActive ? 'font-bold' : ''}`}>{item.label}</span>
-                                    {isActive && (
+                                    <item.icon size={20} className={`shrink-0 transition-colors ${isActive ? 'text-purple-400' : 'text-gray-500 group-hover:text-gray-300'}`} />
+                                    {!isSidebarCollapsed && <span className="font-medium tracking-wide truncate animate-in fade-in slide-in-from-left-2">{item.label}</span>}
+                                    {isActive && !isSidebarCollapsed && (
                                         <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-purple-400 shadow-[0_0_10px_rgba(192,132,252,0.8)]" />
                                     )}
                                 </>
@@ -210,22 +215,35 @@ export default function AdminLayout() {
                 </nav>
 
                 <div className="p-4 border-t border-white/5 bg-black/20">
-                    <div className="bg-white/5 rounded-xl p-4 mb-3 border border-white/5 hover:border-purple-500/30 transition-colors group">
-                        <p className="text-[10px] text-gray-500 uppercase font-bold mb-1 group-hover:text-purple-400 transition-colors">Logged in as</p>
-                        <p className="text-sm font-bold text-white truncate font-mono" title={user.email}>{user.email}</p>
-                    </div>
+                    {!isSidebarCollapsed && (
+                        <div className="bg-white/5 rounded-xl p-4 mb-3 border border-white/5 hover:border-purple-500/30 transition-colors group animate-in fade-in">
+                            <p className="text-[10px] text-gray-500 uppercase font-bold mb-1 group-hover:text-purple-400 transition-colors">Logged in as</p>
+                            <p className="text-sm font-bold text-white truncate font-mono" title={user.email}>{user.email}</p>
+                        </div>
+                    )}
                     <button
                         onClick={() => signOut()}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-3 text-gray-400 hover:text-white hover:bg-red-500/20 hover:border-red-500/20 border border-transparent rounded-xl transition-all text-sm font-bold"
+                        className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-center gap-2'} px-4 py-3 text-gray-400 hover:text-white hover:bg-red-500/20 hover:border-red-500/20 border border-transparent rounded-xl transition-all text-sm font-bold`}
                     >
                         <LogOut size={16} />
-                        Sign Out
+                        {!isSidebarCollapsed && <span>Sign Out</span>}
                     </button>
-                    </div>
+                    
+                    <button
+                        onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                        className="hidden md:flex mt-4 w-full items-center justify-center p-2 bg-white/5 hover:bg-white/10 rounded-lg text-gray-500 hover:text-white transition-all"
+                        title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+                    >
+                        {isSidebarCollapsed ? <ChevronRight size={16} /> : <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest"><ChevronRight className="rotate-180" size={14} /> Collapse</div>}
+                    </button>
+                </div>
                 </div>
             </aside>
 
-            <main className="flex-1 w-full z-10 h-[calc(100vh-73px)] md:h-screen flex flex-col relative overflow-hidden bg-[#050505]">
+            <main className={`
+                flex-1 flex flex-col min-h-screen transition-all duration-300 bg-[#050505] overflow-x-hidden
+                ${isSidebarCollapsed ? 'md:pl-20' : 'md:pl-72'}
+            `}>
 
                 <header className="hidden md:flex items-center justify-between px-8 py-5 border-b border-white/5 bg-black/20 backdrop-blur-xl sticky top-0 z-20">
                     <div className="flex items-center gap-4 text-sm text-gray-500">
@@ -269,8 +287,8 @@ export default function AdminLayout() {
                     </div>
                 </header>
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-10 relative scroll-smooth">
-                    <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700 pb-10">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 relative scroll-smooth">
+                    <div className="max-w-7xl mx-auto pb-10">
                         <Outlet />
                     </div>
                 </div>

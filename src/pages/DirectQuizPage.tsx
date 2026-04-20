@@ -14,6 +14,8 @@ export default function DirectQuizPage() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const challengeId = searchParams.get('challengeId');
+    const customQuestionLimit = Number(searchParams.get('limit') || searchParams.get('questions') || 0) || undefined;
+    const customTimeLimit = Number(searchParams.get('time') || searchParams.get('minutes') || 0) || undefined;
     const [challengeData, setChallengeData] = useState<any>(null);
     const [quiz, setQuiz] = useState<any>(null);
     const [multipleQuizzes, setMultipleQuizzes] = useState<any[]>([]);
@@ -237,7 +239,7 @@ export default function DirectQuizPage() {
             title={quiz.title}
             subtitle={quiz.subjects?.name || 'Private Quiz'}
             questions={questions}
-            storageKey={`quiz_direct_${quiz.id}`} // Use real ID not input code
+            storageKey={`quiz_direct_${quiz.id}`}
             categories={[{ id: quiz.id, label: 'General', description: 'All Questions' }]}
             files={[]}
             fetchQuestions={async () => { }}
@@ -245,10 +247,12 @@ export default function DirectQuizPage() {
             subjectTitle={quiz.subjects?.name}
             shuffleQuestions={quiz.shuffle_questions !== false}
             shuffleOptions={quiz.shuffle_options !== false}
-            initialView="quiz" // Start directly
+            initialView="quiz"
             initialCategory={quiz.id}
             challengeId={challengeId}
             challengeChallengerId={challengeData?.challenger_id}
+            questionLimit={customQuestionLimit}
+            timeLimit={customTimeLimit}
             onHome={() => {
                 if (quiz.semester_id && quiz.subject_id) {
                     navigate(`/quizzes/${quiz.semester_id}/${quiz.subject_id}`);

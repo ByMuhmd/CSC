@@ -74,7 +74,6 @@ export const supportService = {
             }
         }
 
-        // Notify admins and moderators
         const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
         const senderName = profile?.full_name || 'A student';
         notifyAdminTeam(
@@ -192,7 +191,6 @@ export const supportService = {
 
         await supabase.from('support_tickets').update({ status: 'open' }).eq('id', ticketId);
 
-        // Notify admins and moderators if it's a student message
         if (!isAdminReply) {
             const senderName = profile?.full_name || 'A student';
             notifyAdminTeam(

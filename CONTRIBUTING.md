@@ -1,5 +1,7 @@
 # Contributing
 
+Please review [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before participating.
+
 ## Local Setup
 
 1. Fork the repository.

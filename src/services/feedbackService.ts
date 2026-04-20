@@ -41,7 +41,13 @@ export const feedbackService = {
         const { data, error } = await supabase
             .from('feedback')
             .select(`
-                *,
+                id,
+                user_id,
+                type,
+                message,
+                contact_info,
+                status,
+                created_at,
                 user:profiles(full_name, username, avatar_url)
             `)
             .order('created_at', { ascending: false });

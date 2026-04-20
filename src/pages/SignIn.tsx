@@ -4,15 +4,18 @@ import { supabase } from '../lib/supabase';
 import { useNavigate, Link } from 'react-router-dom';
 import { LogIn, Loader2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
 import logo from '../assets/logo3.png';
 import { isAllowedEmailDomain, EMAIL_DOMAIN_POLICY_MESSAGE } from '../utils/emailPolicy';
 import { isDisposableEmail, checkRateLimit, getAuthLockoutState, recordAuthFailure, clearAuthFailures, recordAccessContext } from '../utils/security';
+import { handleSecureError } from '../utils/errorHandling';
 
 export default function SignIn() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [captchaToken, setCaptchaToken] = useState<string | null>(null);
     const navigate = useNavigate();
 
     const handleSignIn = async (e: React.FormEvent) => {
@@ -24,25 +27,25 @@ export default function SignIn() {
         const lockoutState = getAuthLockoutState(`signin:${sanitizedEmail}`);
         if (lockoutState.locked) {
             const minutesLeft = Math.max(1, Math.ceil(lockoutState.remainingMs / 60000));
-            setError(`Too many failed attempts. Try again in ${minutesLeft} minute(s).`);
+            setError(handleSecureError(null, `Too many failed attempts. Try again in ${minutesLeft} minute(s).`));
             setLoading(false);
             return;
         }
 
         if (isDisposableEmail(sanitizedEmail)) {
-            setError('Disposable email addresses are not allowed.');
+            setError(handleSecureError(null, 'Disposable email addresses are not allowed.'));
             setLoading(false);
             return;
         }
 
         if (!isAllowedEmailDomain(sanitizedEmail)) {
-            setError(EMAIL_DOMAIN_POLICY_MESSAGE);
+            setError(handleSecureError(null, EMAIL_DOMAIN_POLICY_MESSAGE));
             setLoading(false);
             return;
         }
 
         if (!checkRateLimit(`signin:${sanitizedEmail}`, 6, 10 * 60 * 1000)) {
-            setError('Too many sign in attempts. Please wait a few minutes and try again.');
+            setError(handleSecureError(null, 'Too many sign in attempts. Please wait a few minutes and try again.'));
             setLoading(false);
             return;
         }
@@ -50,13 +53,16 @@ export default function SignIn() {
         const { data, error } = await supabase.auth.signInWithPassword({
             email: sanitizedEmail,
             password,
+            options: {
+                captchaToken: captchaToken || undefined
+            }
         });
 
         if (error) {
-            setError(error.message);
+            setError(handleSecureError(error, "فشل تسجيل الدخول. يرجى التأكد من البيانات والمحاولة مرة أخرى."));
             const failure = recordAuthFailure(`signin:${sanitizedEmail}`, 5, 15 * 60 * 1000);
             if (failure.locked) {
-                setError('Account locked for 15 minutes after too many failed attempts.');
+                setError(handleSecureError(null, 'Account locked for 15 minutes after too many failed attempts.'));
             }
             setLoading(false);
         } else {
@@ -144,6 +150,17 @@ export default function SignIn() {
                             </div>
                         </div>
 
+                        {import.meta.env.VITE_HCAPTCHA_SITE_KEY && (
+                            <div className="flex justify-center py-2">
+                                <HCaptcha
+                                    sitekey={import.meta.env.VITE_HCAPTCHA_SITE_KEY}
+                                    onVerify={(token) => setCaptchaToken(token)}
+                                    onExpire={() => setCaptchaToken(null)}
+                                    theme="dark"
+                                />
+                            </div>
+                        )}
+
                         <button
                             type="submit"
                             disabled={loading}
@@ -168,7 +185,7 @@ export default function SignIn() {
                                         redirectTo: window.location.origin + '/profile'
                                     }
                                 });
-                                if (error) setError(error.message);
+                                if (error) setError(handleSecureError(error, "فشل تسجيل الدخول عبر Google"));
                             }}
                             className="w-full bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl py-4 font-black text-xs text-gray-400 hover:text-white uppercase tracking-widest transition-all flex items-center justify-center gap-3"
                         >

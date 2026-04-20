@@ -132,7 +132,7 @@ export function Pomodoro({ embedded = false }: { embedded?: boolean }) {
     }, [isActive, isBreak, workTime]);
 
     if (!embedded) {
-        const hiddenPaths = ['/quizzes', '/materials', '/admin', '/ethics', '/differential-equations', '/mobile-apps', '/networks', '/modeling', '/topics'];
+        const hiddenPaths = ['/quizzes', '/materials', '/admin', '/ethics', '/differential-equations', '/mobile-apps', '/networks', '/modeling', '/topics', '/gpa'];
         if (hiddenPaths.some(path => location.pathname.startsWith(path))) return null;
     }
 

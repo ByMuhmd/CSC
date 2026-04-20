@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { BookOpen, Youtube, Send, HardDrive, User, Trophy, LifeBuoy, Swords, Github } from 'lucide-react';
+import { BookOpen, Youtube, Send, HardDrive, User, Trophy, LifeBuoy, Swords, Github, Calculator } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useMaintenance } from '../hooks/useMaintenance';
 import logo from '../assets/logo3.png';
@@ -196,37 +196,58 @@ export default function Home() {
                         </div>
                     </div>
 
-                    <a href="/materials" className={`col-span-1 md:col-span-2 group relative block p-8 md:p-10 bg-[#0a0c10]/40 border border-white/10 hover:border-${activeTheme.accent}-500/50 rounded-[32px] transition-all duration-300 hover:shadow-[0_0_40px_rgba(168,85,247,0.15)] overflow-hidden hover:-translate-y-1 backdrop-blur-md`}>
+                    <a href="/materials" className={`col-span-1 md:col-span-2 md:row-span-2 group relative block p-8 md:p-10 bg-[#0a0c10]/40 border border-white/10 hover:border-${activeTheme.accent}-500/50 rounded-[32px] transition-all duration-300 hover:shadow-[0_0_40px_rgba(168,85,247,0.15)] overflow-hidden hover:-translate-y-1 backdrop-blur-md flex flex-col justify-between h-full min-h-[280px] md:min-h-0`}>
                         <div className={`absolute inset-0 bg-gradient-to-br from-${activeTheme.accent}-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
-                        <div className={`absolute right-0 bottom-0 w-48 h-48 bg-${activeTheme.accent}-500/20 blur-[80px] rounded-full group-hover:bg-${activeTheme.accent}-500/40 transition-colors pointer-events-none`} />
+                        <div className={`absolute right-0 bottom-0 w-64 h-64 bg-${activeTheme.accent}-500/10 blur-[100px] rounded-full group-hover:bg-${activeTheme.accent}-500/30 transition-colors pointer-events-none`} />
 
-                        <div className="relative z-10 flex flex-col items-start space-y-5">
-                            <div className={`p-4 bg-${activeTheme.accent}-500/10 rounded-2xl group-hover:bg-${activeTheme.accent}-500/20 transition-colors duration-300 shadow-lg border border-${activeTheme.accent}-500/20 group-hover:border-${activeTheme.accent}-500/40 group-hover:scale-110`}>
-                                <BookOpen className={`w-8 h-8 text-${activeTheme.accent}-400`} />
+                        <div className="relative z-10 flex flex-col items-start space-y-6">
+                            <div className={`p-5 bg-${activeTheme.accent}-500/10 rounded-2xl group-hover:bg-${activeTheme.accent}-500/20 transition-all duration-500 shadow-lg border border-${activeTheme.accent}-500/20 group-hover:border-${activeTheme.accent}-500/40 group-hover:scale-110 group-hover:rotate-3`}>
+                                <BookOpen className={`w-10 h-10 text-${activeTheme.accent}-400`} />
                             </div>
                             <div>
-                                <h2 className={`mb-2 text-3xl font-black text-white group-hover:text-${activeTheme.accent}-300 transition-colors tracking-tight`}>Materials</h2>
-                                <p className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors font-medium leading-snug">
+                                <h2 className={`mb-3 text-4xl font-black text-white group-hover:text-${activeTheme.accent}-300 transition-colors tracking-tight`}>Materials</h2>
+                                <p className="text-base text-gray-400 group-hover:text-gray-300 transition-colors font-medium leading-relaxed max-w-[200px]">
                                     Access study resources and lecture notes
                                 </p>
                             </div>
                         </div>
+                        
+                        <div className="relative z-10 mt-8 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-500 group-hover:text-white transition-colors">
+                            Explore Repository <Send size={12} className="group-hover:translate-x-1 transition-transform" />
+                        </div>
                     </a>
 
-                    <a href="/quizzes" className="col-span-1 md:col-span-2 group relative block p-8 md:p-10 bg-[#0a0c10]/40 border border-white/10 hover:border-blue-500/50 rounded-[32px] transition-all duration-300 hover:shadow-[0_0_40px_rgba(59,130,246,0.15)] overflow-hidden hover:-translate-y-1 backdrop-blur-md">
+                    <a href="/quizzes" className="col-span-1 md:col-span-2 group relative block p-8 md:p-10 bg-[#0a0c10]/40 border border-white/10 hover:border-blue-500/50 rounded-[32px] transition-all duration-300 hover:shadow-[0_0_40px_rgba(59,130,246,0.15)] overflow-hidden hover:-translate-y-1 backdrop-blur-md h-full">
                         <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                         <div className="absolute right-0 bottom-0 w-48 h-48 bg-blue-500/20 blur-[80px] rounded-full group-hover:bg-blue-500/40 transition-colors pointer-events-none" />
 
-                        <div className="relative z-10 flex flex-col items-start space-y-5">
-                            <div className="p-4 bg-blue-500/10 rounded-2xl group-hover:bg-blue-500/20 transition-colors duration-300 shadow-lg border border-blue-500/20 group-hover:border-blue-500/40 group-hover:scale-110">
+                        <div className="relative z-10 flex flex-row items-center gap-6">
+                            <div className="p-4 bg-blue-500/10 rounded-2xl group-hover:bg-blue-500/20 transition-all duration-300 shadow-lg border border-blue-500/20 group-hover:border-blue-500/40 group-hover:scale-110">
                                 <svg className="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                                 </svg>
                             </div>
                             <div>
-                                <h2 className="mb-2 text-3xl font-black text-white group-hover:text-blue-300 transition-colors tracking-tight">Quizzes</h2>
+                                <h2 className="mb-1 text-2xl md:text-3xl font-black text-white group-hover:text-blue-300 transition-colors tracking-tight">Quizzes</h2>
                                 <p className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors font-medium leading-snug">
-                                    Test your knowledge with practice quizzes
+                                    Practice with interactive quizzes
+                                </p>
+                            </div>
+                        </div>
+                    </a>
+
+                    <a href="/gpa" className="col-span-1 md:col-span-2 group relative block p-8 md:p-10 bg-[#0a0c10]/40 border border-white/10 hover:border-cyan-500/50 rounded-[32px] transition-all duration-300 hover:shadow-[0_0_40px_rgba(34,211,238,0.15)] overflow-hidden hover:-translate-y-1 backdrop-blur-md h-full">
+                        <div className="absolute inset-0 bg-gradient-to-br from-cyan-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        <div className="absolute right-0 bottom-0 w-48 h-48 bg-cyan-500/20 blur-[80px] rounded-full group-hover:bg-cyan-500/40 transition-colors pointer-events-none" />
+
+                        <div className="relative z-10 flex flex-row items-center gap-6">
+                            <div className="p-4 bg-cyan-500/10 rounded-2xl group-hover:bg-cyan-500/20 transition-all duration-300 shadow-lg border border-cyan-500/20 group-hover:border-cyan-500/40 group-hover:scale-110">
+                                <Calculator className="w-8 h-8 text-cyan-400" />
+                            </div>
+                            <div>
+                                <h2 className="mb-1 text-2xl md:text-3xl font-black text-white group-hover:text-cyan-300 transition-colors tracking-tight">GPA & Rules</h2>
+                                <p className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors font-medium leading-snug">
+                                    Calculate GPA and review rules
                                 </p>
                             </div>
                         </div>
@@ -238,22 +259,30 @@ export default function Home() {
                         <div className="col-span-1 md:col-span-4 relative group">
                             <a href="/challenges" className="block p-8 md:p-10 bg-[#0a0c10]/40 border border-white/10 hover:border-emerald-500/50 rounded-[32px] transition-all duration-300 hover:shadow-[0_0_40px_rgba(16,185,129,0.15)] overflow-hidden hover:-translate-y-1 backdrop-blur-md">
                                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                                <div className="absolute right-0 bottom-0 w-48 h-48 bg-emerald-500/20 blur-[80px] rounded-full group-hover:bg-emerald-500/40 transition-colors pointer-events-none" />
+                                <div className="absolute right-0 bottom-0 w-64 h-64 bg-emerald-500/10 blur-[100px] rounded-full group-hover:bg-emerald-500/30 transition-colors pointer-events-none" />
 
-                                <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                                    <div className="flex flex-col items-start space-y-5">
-                                        <div className="p-4 bg-emerald-500/10 rounded-2xl group-hover:bg-emerald-500/20 transition-colors duration-300 shadow-lg border border-emerald-500/20 group-hover:border-emerald-500/40 group-hover:scale-110">
-                                            <Swords className="w-8 h-8 text-emerald-400" />
+                                <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-8">
+                                    <div className="flex flex-col md:flex-row md:items-center gap-6">
+                                        <div className="p-4 bg-emerald-500/10 rounded-2xl group-hover:bg-emerald-500/20 transition-all duration-500 shadow-lg border border-emerald-500/20 group-hover:border-emerald-500/40 group-hover:scale-110 group-hover:-rotate-3">
+                                            <Swords className="w-10 h-10 text-emerald-400" />
                                         </div>
                                         <div>
-                                            <h2 className="text-3xl font-black text-white group-hover:text-emerald-300 transition-colors mb-2 tracking-tight">Challenges</h2>
-                                            <p className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors font-medium leading-snug">Challenge a friend, race through 10 random questions, and compete for XP.</p>
+                                            <h2 className="text-3xl font-black text-white group-hover:text-emerald-300 transition-colors mb-2 tracking-tight">PvP Challenges</h2>
+                                            <p className="text-base text-gray-400 group-hover:text-gray-300 transition-colors font-medium leading-snug max-w-md">Challenge friends, compete in real-time, and climb the global ranks.</p>
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-3">
-                                        <span className="px-4 py-2 rounded-2xl bg-white/5 border border-white/10 text-xs font-bold uppercase tracking-widest text-emerald-300">
-                                            PvP Mode
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex -space-x-3">
+                                            {[1, 2, 3].map(i => (
+                                                <div key={i} className="w-10 h-10 rounded-full border-2 border-emerald-500/30 bg-emerald-900/50 flex items-center justify-center text-[10px] font-black text-emerald-300 backdrop-blur-sm shadow-xl">
+                                                    U{i}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="h-10 w-px bg-white/10 mx-2" />
+                                        <span className="px-5 py-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400 group-hover:bg-emerald-500/20 transition-colors">
+                                            Play Now
                                         </span>
                                     </div>
                                 </div>

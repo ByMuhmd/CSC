@@ -17,6 +17,7 @@ import ComingSoon from './ComingSoon';
 import NotesDrawer from '../components/NotesDrawer';
 import { useMaintenance } from '../hooks/useMaintenance';
 import MaintenancePage from './MaintenancePage';
+import { sanitizeHtml } from '../utils/sanitization';
 
 const GlassCard = ({ children, className = "" }: { children: React.ReactNode, className?: string }) => (
     <div className={`bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:border-purple-500/30 transition-all duration-300 hover:shadow-[0_0_30px_rgba(168,85,247,0.1)] group relative overflow-hidden ${className}`}>
@@ -407,7 +408,7 @@ export default function DynamicCoursePage() {
                                                         </div>
                                                     </div>
                                                     <div className="relative z-10 w-full h-full [&>iframe]:w-full [&>iframe]:h-full [&>video]:w-full [&>video]:h-full"
-                                                        dangerouslySetInnerHTML={{ __html: lessonContent || '' }} />
+                                                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(lessonContent || '') }} />
                                                 </div>
 
                                                 <div className="flex items-center justify-between mb-8">
@@ -500,7 +501,7 @@ export default function DynamicCoursePage() {
                                                             <h2 className="text-4xl font-bold text-white mb-4">Ready to test your knowledge?</h2>
 
                                                             {quizData.instructions ? (
-                                                                <div className="text-gray-400 text-lg mb-10 max-w-md mx-auto leading-relaxed" dangerouslySetInnerHTML={{ __html: quizData.instructions }} />
+                                                                <div className="text-gray-400 text-lg mb-10 max-w-md mx-auto leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHtml(quizData.instructions || '') }} />
                                                             ) : (
                                                                 <p className="text-gray-400 text-lg mb-10 max-w-md mx-auto">
                                                                     Take the quiz to verify your understanding. You need 80% to pass.
@@ -529,7 +530,7 @@ export default function DynamicCoursePage() {
                                                 <div className="prose prose-invert prose-lg max-w-none">
 
                                                     {lessonContent ? (
-                                                        <div dangerouslySetInnerHTML={{ __html: lessonContent }} />
+                                                        <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(lessonContent) }} />
                                                     ) : (
                                                         <div className="p-8 border-2 border-dashed border-white/10 rounded-2xl text-center text-gray-500">
                                                             No content available for this lesson.

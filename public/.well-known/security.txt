@@ -1,0 +1,4 @@
+Contact: bymuhmd@proton.me
+Preferred-Languages: ar, en
+Policy: https://thecohort.vercel.app/security-policy
+Expires: 2027-04-20T11:32:00.000Z

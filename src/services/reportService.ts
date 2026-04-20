@@ -34,7 +34,6 @@ export const reportService = {
         const { data, error } = await supabase
             .from('message_reports')
             .select(`
-                *,
                 reporter:profiles(full_name, avatar_url),
                 group:study_groups(name)
             `)

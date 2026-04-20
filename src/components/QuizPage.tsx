@@ -192,7 +192,7 @@ export default function QuizPage({
     challengeId,
     challengeChallengerId,
     questionLimit,
-    timeLimit // in minutes
+    timeLimit
 }: {
     title: string,
     subtitle: string,
@@ -204,7 +204,7 @@ export default function QuizPage({
     shuffleQuestions?: boolean,
     subjectName?: string | null,
     subjectTitle?: string,
-    fetchQuestions?: (quizId: string) => Promise<void>,
+    fetchQuestions?: (quizId: string) => Promise<any[] | void>,
     loadingQuestions?: boolean,
     initialView?: string,
     initialCategory?: string,
@@ -216,6 +216,14 @@ export default function QuizPage({
     timeLimit?: number
 }) {
     const navigate = useNavigate();
+
+    const getQuestionsForCategory = (sourceQuestions: any[], category: string | null | undefined) => {
+        if (!category) return [];
+        if (category === 'bank') {
+            return sourceQuestions.filter(q => q.category === 'bank');
+        }
+        return sourceQuestions.filter(q => q.category === category);
+    };
 
     const saveState = (key, value) => {
         try {
@@ -314,8 +322,8 @@ export default function QuizPage({
         const saved = loadState('quizQuestions', []);
         if (saved && saved.length > 0) return saved;
 
-        if (questions.length > 0 && initialCategory) {
-            return questions.filter(q => q.category === initialCategory);
+        if (questions.length > 0) {
+            return getQuestionsForCategory(questions, initialCategory);
         }
         return [];
     });
@@ -331,6 +339,7 @@ export default function QuizPage({
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [evaluating, setEvaluating] = useState(null);
     const [essayResults, setEssayResults] = useState(() => loadState('essayResults', {}));
+    const [quizSessionId, setQuizSessionId] = useState<string | null>(() => loadState('quizSessionId', null));
 
     const [showReportModal, setShowReportModal] = useState(false);
     const [reportType, setReportType] = useState('bug');
@@ -454,7 +463,8 @@ ${reportText}
             timeLeft,
 
             theme,
-            essayResults
+            essayResults,
+            quizSessionId
         };
         localStorage.setItem(storageKey, JSON.stringify(stateToSave));
     }, [view, currentCategory, quizQuestions, currentIndex, userAnswers, score, history, theme, essayResults, elapsedTime, timeLeft, storageKey]);
@@ -492,92 +502,115 @@ ${reportText}
         }
     };
 
-    const finishQuiz = () => {
-        const newAttempt = {
-            id: Date.now(),
-            date: new Date().toISOString(),
-            category: currentCategory,
-            score: score,
-            total: quizQuestions.length,
-            timeSpent: elapsedTime,
-            wrongAnswers: quizQuestions
-                .map((q, idx) => ({ ...q, userAnswer: userAnswers[idx] }))
-                .filter(q => !q.userAnswer?.correct)
-        };
+        const finishQuiz = async () => {
+            const correctMCQs = quizQuestions.reduce((acc, q, idx) => {
+                if (q.type === 'essay') return acc;
+                return acc + (userAnswers[idx]?.correct ? 1 : 0);
+            }, 0);
 
-        const correctMCQs = quizQuestions.reduce((acc, q, idx) => {
-            if (q.type === 'essay') return acc;
-            return acc + (userAnswers[idx]?.correct ? 1 : 0);
-        }, 0);
+            const essayCount = quizQuestions.filter(q => q.type === 'essay').length;
+            const finalScore = correctMCQs + essayCount;
 
-        const essayCount = quizQuestions.filter(q => q.type === 'essay').length;
-        const finalScore = correctMCQs + essayCount;
+            const xpGained = (finalScore * XP_PER_CORRECT_ANSWER) + XP_PER_QUIZ_COMPLETE;
 
-        const xpGained = (finalScore * XP_PER_CORRECT_ANSWER) + XP_PER_QUIZ_COMPLETE;
-
-        const lastQuizData = {
-            title: title || 'Quiz',
-            score: finalScore,
-            timestamp: new Date().toISOString()
-        };
-
-        const currentLocal = dataService.getLocalProgress();
-        dataService.saveLocalProgress({
-            xp: currentLocal.xp + xpGained,
-            quizzesCompleted: currentLocal.quizzesCompleted + 1,
-            totalScore: currentLocal.totalScore + finalScore,
-            lastQuiz: lastQuizData
-        });
-
-        if (user) {
-            dataService.updateCloudProgress(user.id, xpGained, 1, finalScore, lastQuizData);
-
-            dataService.recordQuizAttempt({
-                user_id: user.id,
-                user_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Anonymous',
-                quiz_category: categories.find(c => c.id === currentCategory)?.label || currentCategory || 'General',
+            const lastQuizData = {
+                title: title || 'Quiz',
                 score: finalScore,
-                total_questions: quizQuestions.length,
-                percentage: Math.round((finalScore / quizQuestions.length) * 100)
+                timestamp: new Date().toISOString()
+            };
+
+            const currentLocal = dataService.getLocalProgress();
+            dataService.saveLocalProgress({
+                xp: currentLocal.xp + xpGained,
+                quizzesCompleted: currentLocal.quizzesCompleted + 1,
+                totalScore: currentLocal.totalScore + finalScore,
+                lastQuiz: lastQuizData
             });
 
-            if (challengeId && challengeChallengerId) {
-                challengeService.submitScore(challengeId, user.id, finalScore, challengeChallengerId)
-                    .catch(e => console.error("Failed to submit challenge score:", e));
-            }
-        }
+            if (user) {
+                let secureResult = null;
+                if (quizSessionId) {
+                    try {
+                        const submissionAnswers = quizQuestions.map((q, idx) => ({
+                            question_id: q.id,
+                            selected_option: userAnswers[idx]?.option || ''
+                        }));
+                        secureResult = await dataService.submitQuizSecurely(quizSessionId, submissionAnswers);
+                    } catch (e) {
+                        console.error("Secure submission failed, falling back to basic record", e);
+                    }
+                }
 
-        setScore(finalScore);
-        setHistory(prev => [newAttempt, ...prev]);
-        setView('result');
-    };
+                const finalScoreToRecord = secureResult ? secureResult.score : finalScore;
+                const xpToRecord = secureResult ? secureResult.xp_gained : xpGained;
+
+                const quizResultId = await dataService.recordQuizAttempt({
+                    user_id: user.id,
+                    user_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Anonymous',
+                    quiz_category: categories.find(c => c.id === currentCategory)?.label || currentCategory || 'General',
+                    score: finalScoreToRecord,
+                    total_questions: quizQuestions.length,
+                    percentage: Math.round((finalScoreToRecord / quizQuestions.length) * 100)
+                });
+
+                dataService.updateCloudProgress(user.id, secureResult ? 0 : xpToRecord, 1, finalScoreToRecord, lastQuizData, quizResultId || undefined);
+
+                if (challengeId && challengeChallengerId) {
+                    challengeService.submitScore(challengeId, user.id, finalScoreToRecord, challengeChallengerId)
+                        .catch(e => console.error("Failed to submit challenge score:", e));
+                }
+
+                if (secureResult) {
+                    setQuizSessionId(null);
+                }
+            }
+
+            const newAttempt = {
+                id: Date.now(),
+                date: new Date().toISOString(),
+                category: currentCategory,
+                score: finalScore,
+                total: quizQuestions.length,
+                timeSpent: elapsedTime,
+                wrongAnswers: quizQuestions
+                    .map((q, idx) => ({ ...q, userAnswer: userAnswers[idx] }))
+                    .filter(q => !q.userAnswer?.correct)
+            };
+
+            setScore(finalScore);
+            setHistory(prev => [newAttempt, ...prev]);
+            setView('result');
+        };
 
     const startQuiz = async (catId: string) => {
         if (view === 'quiz' && currentCategory === catId) {
             return;
         }
 
+        let fetchedQuestions: any[] | void = undefined;
         if (fetchQuestions && catId !== 'bank' && !subjectName) {
             setTargetCategory(catId);
-            await fetchQuestions(catId);
+            fetchedQuestions = await fetchQuestions(catId);
         }
 
-        startQuizInternal(catId);
+        startQuizInternal(catId, Array.isArray(fetchedQuestions) ? fetchedQuestions : undefined);
     };
 
-    const startQuizInternal = (category) => {
+    const startQuizInternal = async (category, sourceQuestions = questions) => {
+        if (user) {
+            const sid = await dataService.startQuizSession(category !== 'general' ? category : undefined);
+            if (sid) setQuizSessionId(sid);
+        }
+        
         const categoryData = initialCategories.find(c => c.id === category);
         let finalShuffleQuestions = categoryData?.shuffleQuestions !== undefined ? categoryData.shuffleQuestions : shuffleQuestions;
         const finalShuffleOptions = categoryData?.shuffleOptions !== undefined ? categoryData.shuffleOptions : shuffleOptions;
         
         if (questionLimit) finalShuffleQuestions = true;
 
-        let filtered = [];
-        if (category === 'bank') {
-            filtered = questions.filter(q => q.category === 'bank');
-        } else {
-            filtered = questions.filter(q => q.category === category);
-        }
+        let filtered = category === 'general' 
+            ? sourceQuestions 
+            : getQuestionsForCategory(sourceQuestions, category);
         
         if (finalShuffleQuestions) {
             filtered.sort(() => Math.random() - 0.5);
@@ -629,14 +662,16 @@ ${reportText}
     const [targetCategory, setTargetCategory] = useState<string | null>(null);
 
     useEffect(() => {
-        if (view === 'quiz' && quizQuestions.length === 0 && questions.length > 0 && currentCategory) {
-            let filtered = [];
-            if (currentCategory === 'bank') {
-                filtered = questions.filter(q => q.category === 'bank');
-            } else {
-                filtered = questions.filter(q => q.category === currentCategory);
-            }
-            if (filtered.length > 0) {
+        if (view === 'quiz' && questions.length > 0 && currentCategory) {
+            const availableForCategory = currentCategory === 'general' 
+                ? questions 
+                : getQuestionsForCategory(questions, currentCategory);
+            const shouldRepairQuizQuestions =
+                quizQuestions.length === 0 ||
+                (currentCategory !== 'general' && !quizQuestions.every(q => q.category === currentCategory));
+
+            if (availableForCategory.length > 0 && shouldRepairQuizQuestions) {
+                let filtered = [...availableForCategory];
 
                 
                 const categoryData = initialCategories.find(c => c.id === currentCategory);
@@ -672,7 +707,7 @@ ${reportText}
                 if (timeLimit && timeLeft === null) setTimeLeft(timeLimit * 60);
             }
         }
-    }, [questions, view, quizQuestions.length, currentCategory, shuffleOptions, shuffleQuestions, questionLimit, timeLimit]);
+    }, [questions, view, quizQuestions, currentCategory, initialCategories, shuffleOptions, shuffleQuestions, questionLimit, timeLimit, timeLeft]);
 
     useEffect(() => {
         if (autoStart && initialCategory && !subjectName) {

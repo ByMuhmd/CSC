@@ -147,6 +147,7 @@ Recommended deployment checklist:
 Before contributing, read:
 
 - [CONTRIBUTING.md](CONTRIBUTING.md)
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 - [SECURITY.md](SECURITY.md)
 - [LICENSE](LICENSE)
 

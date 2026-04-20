@@ -478,3 +478,51 @@ Schema:
         return { questions: [], error: getPublicErrorMessage(error, 'Failed to parse quiz text right now.') };
     }
 };
+
+export interface GeneratedLesson {
+    title: string;
+    content: string;
+    duration: number;
+}
+
+export async function generateLessonFromTopic(apiKey: string, topic: string, style: string = 'professional'): Promise<{ lessons?: GeneratedLesson[], error?: string }> {
+    const prompt = `Generate a series of 3-5 educational lessons for the topic: "${topic}". 
+    Style: ${style}. 
+    Return a JSON array of objects with: "title", "content" (HTML format with tailwind classes like text-gray-300, leading-relaxed), and "duration" (minutes).`;
+
+    try {
+        const result = await fetchWithFallback(apiKey, {
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { response_mime_type: "application/json" }
+        });
+        
+        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) return { error: "No response from AI" };
+        
+        const parsed = JSON.parse(text);
+        return { lessons: Array.isArray(parsed) ? parsed : (parsed.lessons || []) };
+    } catch (e) {
+        return { error: String(e) };
+    }
+}
+
+export async function splitTextIntoLessons(apiKey: string, rawText: string): Promise<{ lessons?: GeneratedLesson[], error?: string }> {
+    const prompt = `Split the following educational text into logical lessons. 
+    Return a JSON array of objects with: "title", "content" (the original content for that section, formatted as HTML), and "duration". 
+    Text: ${rawText}`;
+
+    try {
+        const result = await fetchWithFallback(apiKey, {
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { response_mime_type: "application/json" }
+        });
+        
+        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) return { error: "No response from AI" };
+        
+        const parsed = JSON.parse(text);
+        return { lessons: Array.isArray(parsed) ? parsed : (parsed.lessons || []) };
+    } catch (e) {
+        return { error: String(e) };
+    }
+}

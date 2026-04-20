@@ -65,14 +65,14 @@ export const dataService = {
             try {
                 const guestProfile = JSON.parse(guestProfileStr);
 
-                const newGuestProofile = {
+                const newGuestProfile = {
                     ...guestProfile,
                     xp: updated.xp,
                     quizzesCompleted: updated.quizzesCompleted || guestProfile.quizzesCompleted || 0,
                     total_score: updated.totalScore || guestProfile.total_score || 0,
                     last_quiz_activity: updated.lastQuiz || guestProfile.last_quiz_activity
                 };
-                localStorage.setItem('guest_profile', JSON.stringify(newGuestProofile));
+                localStorage.setItem('guest_profile', JSON.stringify(newGuestProfile));
 
                 if (guestProfile.id) {
                     supabase.from('guest_scores').upsert({
@@ -122,20 +122,18 @@ export const dataService = {
 
             const currentCloud = cloudData || { xp: 0, quizzes_completed: 0, total_score: 0 };
 
-            const newXp = (currentCloud.xp || 0) + local.xp;
+            if (local.xp > 0) {
+                await supabase.rpc('add_user_xp', { xp_to_add: local.xp });
+            }
+
             const newQuizzes = (currentCloud.quizzes_completed || 0) + local.quizzesCompleted;
             const newScore = (currentCloud.total_score || 0) + local.totalScore;
 
-            const newLevel = calculateLevel(newXp);
-
-            await supabase.from('profiles').upsert({
-                id: userId,
-                xp: newXp,
-                level: newLevel,
+            await supabase.from('profiles').update({
                 quizzes_completed: newQuizzes,
                 total_score: newScore,
                 updated_at: new Date().toISOString()
-            });
+            }).eq('id', userId);
 
             localStorage.removeItem(STORAGE_KEY);
             console.log("Sync Complete. Guest progress merged.");
@@ -145,46 +143,37 @@ export const dataService = {
         }
     },
 
-    async updateCloudProgress(userId: string, xpToAdd: number, quizzesToAdd: number = 0, scoreToAdd: number = 0, lastQuiz: { title: string, score: number, timestamp: string } | null = null) {
-
+    async updateCloudProgress(userId: string, xpToAdd: number, quizzesToAdd: number = 0, scoreToAdd: number = 0, lastQuiz: { title: string, score: number, timestamp: string } | null = null, quizResultId?: string) {
         try {
+            if (quizResultId) {
+                await supabase.rpc('secure_claim_xp', { 
+                    p_source_type: 'quiz', 
+                    p_source_id: quizResultId 
+                });
+            } else if (xpToAdd > 0) {
+                await supabase.rpc('add_user_xp', { xp_to_add: xpToAdd });
+            }
+
             const { data: profile } = await supabase
                 .from('profiles')
-                .select('xp, quizzes_completed, total_score, last_quiz_activity')
+                .select('xp, level, quizzes_completed, total_score')
                 .eq('id', userId)
                 .single();
 
-            if (!profile) {
-
-                console.log("Profile missing, creating new one...");
-                const newXp = Math.max(0, xpToAdd);
-                const newLevel = calculateLevel(newXp);
-
-                await supabase.from('profiles').upsert({
-                    id: userId,
-                    xp: newXp,
-                    level: newLevel,
-                    quizzes_completed: quizzesToAdd,
-                    total_score: scoreToAdd,
-                    last_quiz_activity: lastQuiz,
+            if (profile) {
+                await supabase.from('profiles').update({
+                    quizzes_completed: (profile.quizzes_completed || 0) + quizzesToAdd,
+                    total_score: (profile.total_score || 0) + scoreToAdd,
+                    last_quiz_activity: lastQuiz || null,
                     updated_at: new Date().toISOString()
+                }).eq('id', userId);
+
+                useGamification.setState({ 
+                    xp: profile.xp || 0, 
+                    level: profile.level || 1 
                 });
-                return;
             }
-
-            const newXp = Math.max(0, (profile.xp || 0) + xpToAdd);
-            const newLevel = calculateLevel(newXp);
-
-            await supabase.from('profiles').update({
-                xp: newXp,
-                level: newLevel,
-                quizzes_completed: (profile.quizzes_completed || 0) + quizzesToAdd,
-                total_score: (profile.total_score || 0) + scoreToAdd,
-                last_quiz_activity: lastQuiz || profile.last_quiz_activity,
-                updated_at: new Date().toISOString()
-            }).eq('id', userId);
-
-            useGamification.setState({ xp: newXp, level: newLevel });
+            
             useGamification.getState().checkStreak();
 
         } catch (err) {
@@ -201,7 +190,7 @@ export const dataService = {
         percentage: number;
     }) {
         try {
-            const { error } = await supabase
+            const { data, error } = await supabase
                 .from('quiz_results')
                 .insert({
                     user_id: attemptData.user_id,
@@ -211,13 +200,46 @@ export const dataService = {
                     total_questions: attemptData.total_questions,
                     percentage: attemptData.percentage,
                     created_at: new Date().toISOString()
-                });
+                })
+                .select('id')
+                .single();
 
             if (error) {
                 console.error("Failed to record quiz attempt:", error);
+                return null;
             }
+            return data?.id || null;
         } catch (e) {
             console.error("Error recording quiz attempt:", e);
+            return null;
+        }
+    },
+
+    async startQuizSession(quizId?: string, subjectId?: string) {
+        try {
+            const { data, error } = await supabase.rpc('start_quiz_session', {
+                p_quiz_id: quizId || null,
+                p_subject_id: subjectId || null
+            });
+            if (error) throw error;
+            return data;
+        } catch (e) {
+            console.error("Failed to start quiz session:", e);
+            return null;
+        }
+    },
+
+    async submitQuizSecurely(sessionId: string, answers: { question_id: string, selected_option: string }[]) {
+        try {
+            const { data, error } = await supabase.rpc('submit_quiz_securely', {
+                p_session_id: sessionId,
+                p_answers: answers
+            });
+            if (error) throw error;
+            return data;
+        } catch (e) {
+            console.error("Secure submission failed:", e);
+            throw e;
         }
     }
 };

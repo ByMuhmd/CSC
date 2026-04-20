@@ -47,7 +47,6 @@ export default function AdminTeam() {
         const { data } = await supabase
             .from('audit_logs')
             .select(`
-                *,
                 admin:admin_id (
                     email,
                     full_name
